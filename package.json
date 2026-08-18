@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
- "scripts": {
-  "dev": "tsx watch src/server.ts",
-  "build": "tsc",
-  "start": "node dist/server.js",
-  "type-check": "tsc --noEmit",
-  "test": "echo \"Tests not configured yet\""
-},
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"Tests not configured yet\""
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -21,6 +21,8 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "@prisma/client": "^7.9.1",
+    "express": "^5.2.1",
+    "prisma": "^7.9.1"
   }
 }

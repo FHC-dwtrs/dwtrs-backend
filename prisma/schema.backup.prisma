@@ -1,0 +1,644 @@
+// ============================================================
+// DWTRS - Document Workflow Tracking and Reporting System
+// Final Frozen Database Schema
+// PostgreSQL + Prisma 7
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum CaseStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  IN_PROGRESS
+  PENDING_CLARIFICATION
+  SENT_BACK_FOR_CORRECTION
+  APPROVED
+  REJECTED
+  COMPLETED
+  ARCHIVED
+}
+
+enum UnitType {
+  SECTOR
+  DIRECTORATE
+  GROUP
+}
+
+enum DecisionType {
+  APPROVED
+  REJECTED
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================================
+// 1. CUSTOMER
+// ============================================================
+
+model Customer {
+  customerId String @id @default(uuid()) @db.Uuid
+
+  name    String  @db.VarChar(150)
+  phone   String  @db.VarChar(30)
+  email   String? @db.VarChar(255)
+  address String? @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+
+  cases Case[]
+
+  @@index([phone])
+  @@index([email])
+  @@map("customer")
+}
+
+// ============================================================
+// 2. CASE
+// ============================================================
+
+model Case {
+  caseId String @id @default(uuid()) @db.Uuid
+
+  customerId String @db.Uuid
+
+  trackingNumber       String     @unique @db.VarChar(50)
+  incomingReferenceNo  String?    @db.VarChar(100)
+  subject              String     @db.VarChar(500)
+  status               CaseStatus @default(SUBMITTED)
+  currentUnitId        String?    @db.Uuid
+  submittedAt          DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  version              Int        @default(1)
+
+  customer Customer @relation(
+    fields: [customerId],
+    references: [customerId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  currentUnit OrganizationalUnit? @relation(
+    "CurrentCaseUnit",
+    fields: [currentUnitId],
+    references: [unitId],
+    onDelete: SetNull,
+    onUpdate: Cascade
+  )
+
+  documents           Document[]
+  workflowAssignments WorkflowAssignment[]
+  statusHistory       StatusHistory[]
+  remarks             Remark[]
+  decisions           Decision[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+
+  @@index([customerId])
+  @@index([incomingReferenceNo])
+  @@index([currentUnitId])
+  @@index([status])
+  @@index([submittedAt])
+  @@map("case")
+}
+
+// ============================================================
+// 3. DOCUMENT
+// ============================================================
+
+model Document {
+  documentId String @id @default(uuid()) @db.Uuid
+
+  caseId        String @db.Uuid
+  documentType  String @db.VarChar(100)
+  title         String @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case     Case              @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  versions DocumentVersion[]
+
+  @@index([caseId])
+  @@map("document")
+}
+
+// ============================================================
+// 4. DOCUMENT VERSION
+// ============================================================
+
+model DocumentVersion {
+  versionId     String @id @default(uuid()) @db.Uuid
+
+  documentId    String @db.Uuid
+  versionNumber Int
+  createdBy     String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  document Document @relation(
+    fields: [documentId],
+    references: [documentId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  creator User @relation(
+    "DocumentVersionCreator",
+    fields: [createdBy],
+    references: [userId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  attachments Attachment[]
+
+  @@unique([documentId, versionNumber])
+  @@index([createdBy])
+  @@map("document_version")
+}
+
+// ============================================================
+// 5. ATTACHMENT
+// ============================================================
+
+model Attachment {
+  attachmentId String @id @default(uuid()) @db.Uuid
+
+  versionId String @db.Uuid
+
+  fileName   String @db.VarChar(255)
+  storageKey String @db.VarChar(500)
+  mimeType   String @db.VarChar(100)
+  fileSize   BigInt
+  checksum   String? @db.VarChar(128)
+
+  uploadedAt DateTime @default(now())
+
+  version DocumentVersion @relation(
+    fields: [versionId],
+    references: [versionId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  @@index([versionId])
+  @@index([checksum])
+  @@map("attachment")
+}
+
+// ============================================================
+// 6. ORGANIZATIONAL UNIT
+// ============================================================
+
+model OrganizationalUnit {
+  unitId       String   @id @default(uuid()) @db.Uuid
+  parentUnitId String?  @db.Uuid
+
+  name      String   @db.VarChar(150)
+  unitType  UnitType
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent OrganizationalUnit? @relation(
+    "UnitHierarchy",
+    fields: [parentUnitId],
+    references: [unitId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  children OrganizationalUnit[] @relation("UnitHierarchy")
+
+  users User[]
+
+  currentCases Case[] @relation("CurrentCaseUnit")
+
+  outgoingAssignments WorkflowAssignment[] @relation("AssignmentFromUnit")
+
+  incomingAssignments WorkflowAssignment[] @relation("AssignmentToUnit")
+
+  @@index([parentUnitId])
+  @@index([unitType])
+  @@index([isActive])
+  @@map("organizational_unit")
+}
+
+// ============================================================
+// 7. USER
+// ============================================================
+
+model User {
+  userId String @id @default(uuid()) @db.Uuid
+
+  unitId String @db.Uuid
+
+  name         String   @db.VarChar(150)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  unit OrganizationalUnit @relation(
+    fields: [unitId],
+    references: [unitId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  roles UserRole[]
+
+  assignedWorkflows WorkflowAssignment[] @relation("AssignmentPerformedBy")
+
+  statusChanges StatusHistory[] @relation("StatusChangedBy")
+
+  remarks Remark[]
+
+  decisions Decision[] @relation("DecisionMadeBy")
+
+  documentVersions DocumentVersion[] @relation("DocumentVersionCreator")
+
+  auditLogs AuditLog[]
+
+  notifications Notification[]
+
+  @@index([unitId])
+  @@index([isActive])
+  @@map("user")
+}
+
+// ============================================================
+// 8. ROLE
+// ============================================================
+
+model Role {
+  roleId String @id @default(uuid()) @db.Uuid
+
+  name        String  @unique @db.VarChar(100)
+  description String? @db.VarChar(500)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@index([isActive])
+  @@map("role")
+}
+
+// ============================================================
+// 9. PERMISSION
+// ============================================================
+
+model Permission {
+  permissionId String @id @default(uuid()) @db.Uuid
+
+  name        String @unique @db.VarChar(150)
+  description String? @db.VarChar(500)
+  resource    String  @db.VarChar(100)
+  action      String  @db.VarChar(100)
+
+  roles RolePermission[]
+
+  @@index([resource])
+  @@index([action])
+  @@map("permission")
+}
+
+// ============================================================
+// 10. USER ROLE
+// ============================================================
+
+model UserRole {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  assignedAt DateTime @default(now())
+
+  user User @relation(
+    fields: [userId],
+    references: [userId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  role Role @relation(
+    fields: [roleId],
+    references: [roleId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_role")
+}
+
+// ============================================================
+// 11. ROLE PERMISSION
+// ============================================================
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role Role @relation(
+    fields: [roleId],
+    references: [roleId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  permission Permission @relation(
+    fields: [permissionId],
+    references: [permissionId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permission")
+}
+
+// ============================================================
+// 12. WORKFLOW ASSIGNMENT
+// ============================================================
+
+model WorkflowAssignment {
+  assignmentId String @id @default(uuid()) @db.Uuid
+
+  caseId String @db.Uuid
+
+  fromUnitId String? @db.Uuid
+  toUnitId   String  @db.Uuid
+
+  assignedBy String @db.Uuid
+
+  assignmentStatus AssignmentStatus @default(ACTIVE)
+
+  remarks      String?   @db.VarChar(1000)
+  assignedAt   DateTime  @default(now())
+  completedAt  DateTime?
+
+  case Case @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  fromUnit OrganizationalUnit? @relation(
+    "AssignmentFromUnit",
+    fields: [fromUnitId],
+    references: [unitId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  toUnit OrganizationalUnit @relation(
+    "AssignmentToUnit",
+    fields: [toUnitId],
+    references: [unitId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  assigner User @relation(
+    "AssignmentPerformedBy",
+    fields: [assignedBy],
+    references: [userId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  remarksHistory Remark[]
+
+  @@index([caseId])
+  @@index([fromUnitId])
+  @@index([toUnitId])
+  @@index([assignedBy])
+  @@index([assignmentStatus])
+  @@index([assignedAt])
+  @@map("workflow_assignment")
+}
+
+// ============================================================
+// 13. STATUS HISTORY
+// ============================================================
+
+model StatusHistory {
+  statusHistoryId String @id @default(uuid()) @db.Uuid
+
+  caseId    String     @db.Uuid
+  changedBy String     @db.Uuid
+  status    CaseStatus
+  changedAt DateTime   @default(now())
+
+  case Case @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  changer User @relation(
+    "StatusChangedBy",
+    fields: [changedBy],
+    references: [userId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  @@index([caseId])
+  @@index([changedBy])
+  @@index([status])
+  @@index([changedAt])
+  @@map("status_history")
+}
+
+// ============================================================
+// 14. REMARK
+// ============================================================
+
+model Remark {
+  remarkId String @id @default(uuid()) @db.Uuid
+
+  caseId       String  @db.Uuid
+  userId       String  @db.Uuid
+  assignmentId String? @db.Uuid
+
+  remarkText String @db.VarChar(2000)
+
+  createdAt DateTime @default(now())
+
+  case Case @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  user User @relation(
+    fields: [userId],
+    references: [userId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  assignment WorkflowAssignment? @relation(
+    fields: [assignmentId],
+    references: [assignmentId],
+    onDelete: SetNull,
+    onUpdate: Cascade
+  )
+
+  @@index([caseId])
+  @@index([userId])
+  @@index([assignmentId])
+  @@map("remark")
+}
+
+// ============================================================
+// 15. DECISION
+// ============================================================
+
+model Decision {
+  decisionId String @id @default(uuid()) @db.Uuid
+
+  caseId     String       @db.Uuid
+  decidedBy  String       @db.Uuid
+  decisionType DecisionType
+  decisionText String?    @db.VarChar(2000)
+
+  decidedAt DateTime @default(now())
+
+  case Case @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  decider User @relation(
+    "DecisionMadeBy",
+    fields: [decidedBy],
+    references: [userId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  @@index([caseId])
+  @@index([decidedBy])
+  @@index([decisionType])
+  @@index([decidedAt])
+  @@map("decision")
+}
+
+// ============================================================
+// 16. AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  auditLogId String @id @default(uuid()) @db.Uuid
+
+  userId String  @db.Uuid
+  caseId String? @db.Uuid
+
+  action     String @db.VarChar(100)
+  entityType String @db.VarChar(100)
+  entityId   String @db.VarChar(100)
+
+  oldValues Json?
+  newValues Json?
+
+  ipAddress String? @db.VarChar(45)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(
+    fields: [userId],
+    references: [userId],
+    onDelete: Restrict,
+    onUpdate: Cascade
+  )
+
+  case Case? @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: SetNull,
+    onUpdate: Cascade
+  )
+
+  @@index([userId])
+  @@index([caseId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// ============================================================
+// 17. NOTIFICATION
+// ============================================================
+
+model Notification {
+  notificationId String @id @default(uuid()) @db.Uuid
+
+  userId String @db.Uuid
+  caseId String? @db.Uuid
+
+  notificationType String @db.VarChar(100)
+  title             String @db.VarChar(255)
+  message           String @db.VarChar(2000)
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  user User @relation(
+    fields: [userId],
+    references: [userId],
+    onDelete: Cascade,
+    onUpdate: Cascade
+  )
+
+  case Case? @relation(
+    fields: [caseId],
+    references: [caseId],
+    onDelete: SetNull,
+    onUpdate: Cascade
+  )
+
+  @@index([userId, isRead])
+  @@index([caseId])
+  @@index([createdAt])
+  @@map("notification")
+}
