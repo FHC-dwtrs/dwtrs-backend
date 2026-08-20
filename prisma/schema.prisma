@@ -215,7 +215,7 @@ model OrganizationalUnit {
 model User {
   userId String @id @default(uuid()) @db.Uuid
 
-  unitId String @db.Uuid
+  unitId String? @db.Uuid
 
   name         String    @db.VarChar(150)
   email        String    @unique @db.VarChar(255)
@@ -226,7 +226,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  unit OrganizationalUnit @relation(fields: [unitId], references: [unitId], onDelete: Restrict, onUpdate: Cascade)
+  unit OrganizationalUnit? @relation(fields: [unitId], references: [unitId], onDelete: Restrict, onUpdate: Cascade)
 
   roles UserRole[]
 
