@@ -230,12 +230,160 @@ const rolePermissions: Record<string, string[]> = {
   ],
 };
 
-async function main() {
-  console.log("Starting RBAC seeding...");
+/**
+ * Organizational Units
+ *
+ * parentName is used to establish the hierarchy:
+ *
+ * Sector
+ *   ↓
+ * Directorate
+ *   ↓
+ * Group
+ */
+const organizationalUnits = [
+  // ============================================================
+  // SECTORS
+  // ============================================================
 
-  // ------------------------------------------------------------
-  // 1. Ensure roles exist
-  // ------------------------------------------------------------
+  {
+    name: "Housing Development Sector",
+    unitType: "SECTOR" as const,
+    parentName: null,
+  },
+  {
+    name: "Corporate Service Sector",
+    unitType: "SECTOR" as const,
+    parentName: null,
+  },
+  {
+    name: "Houses Administration Sector",
+    unitType: "SECTOR" as const,
+    parentName: null,
+  },
+  {
+    name: "Construction Input Supply Sector",
+    unitType: "SECTOR" as const,
+    parentName: null,
+  },
+
+  // ============================================================
+  // HOUSING DEVELOPMENT SECTOR
+  // ============================================================
+
+  {
+    name: "Project Monitoring Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Housing Development Sector",
+  },
+  {
+    name: "Land & Infrastructure Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Housing Development Sector",
+  },
+  {
+    name: "Project Study & Design Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Housing Development Sector",
+  },
+
+  // ============================================================
+  // CORPORATE SERVICE SECTOR
+  // ============================================================
+
+  {
+    name: "Legal Service Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Corporate Service Sector",
+  },
+  {
+    name: "ICT Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Corporate Service Sector",
+  },
+  {
+    name: "HR Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Corporate Service Sector",
+  },
+  {
+    name: "Finance Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Corporate Service Sector",
+  },
+  {
+    name: "Records & Archive Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Corporate Service Sector",
+  },
+
+  // ============================================================
+  // HOUSES ADMINISTRATION SECTOR
+  // ============================================================
+
+  {
+    name: "Customer Service Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Houses Administration Sector",
+  },
+  {
+    name: "Property Rental Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Houses Administration Sector",
+  },
+  {
+    name: "Maintenance Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Houses Administration Sector",
+  },
+  {
+    name: "Sales Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Houses Administration Sector",
+  },
+  {
+    name: "Branch Offices Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Houses Administration Sector",
+  },
+
+  // ============================================================
+  // CONSTRUCTION INPUT SUPPLY SECTOR
+  // ============================================================
+
+  {
+    name: "Machinery & Vehicle Maintenance Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Construction Input Supply Sector",
+  },
+  {
+    name: "Construction Input Products Directorate",
+    unitType: "DIRECTORATE" as const,
+    parentName: "Construction Input Supply Sector",
+  },
+
+  // ============================================================
+  // PROTOTYPE GROUPS
+  // ============================================================
+
+  {
+    name: "ICT Group A",
+    unitType: "GROUP" as const,
+    parentName: "ICT Directorate",
+  },
+  {
+    name: "ICT Group B",
+    unitType: "GROUP" as const,
+    parentName: "ICT Directorate",
+  },
+];
+
+async function main() {
+  console.log("Starting DWTRS seeding...");
+
+  // ============================================================
+  // 1. ENSURE ROLES EXIST
+  // ============================================================
 
   for (const role of roles) {
     await prisma.role.upsert({
@@ -256,9 +404,9 @@ async function main() {
     console.log(`Role ensured: ${role.name}`);
   }
 
-  // ------------------------------------------------------------
-  // 2. Ensure role → permission assignments exist
-  // ------------------------------------------------------------
+  // ============================================================
+  // 2. ENSURE ROLE → PERMISSION ASSIGNMENTS EXIST
+  // ============================================================
 
   for (const [roleName, permissionNames] of Object.entries(
     rolePermissions,
@@ -306,12 +454,73 @@ async function main() {
     );
   }
 
-  console.log("RBAC seeding completed successfully.");
+  // ============================================================
+  // 3. ENSURE ORGANIZATIONAL UNITS EXIST
+  // ============================================================
+
+  for (const unit of organizationalUnits) {
+    let parentUnitId: string | null = null;
+
+    // Find parent unit if this is a Directorate or Group
+    if (unit.parentName) {
+      const parent = await prisma.organizationalUnit.findFirst({
+        where: {
+          name: unit.parentName,
+        },
+      });
+
+      if (!parent) {
+        throw new Error(
+          `Parent organizational unit not found: ${unit.parentName}`,
+        );
+      }
+
+      parentUnitId = parent.unitId;
+    }
+
+    // Because "name" is not unique in the current schema,
+    // use findFirst instead of upsert.
+    const existingUnit =
+      await prisma.organizationalUnit.findFirst({
+        where: {
+          name: unit.name,
+          parentUnitId,
+        },
+      });
+
+    if (existingUnit) {
+      await prisma.organizationalUnit.update({
+        where: {
+          unitId: existingUnit.unitId,
+        },
+        data: {
+          unitType: unit.unitType,
+          parentUnitId,
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.organizationalUnit.create({
+        data: {
+          name: unit.name,
+          unitType: unit.unitType,
+          parentUnitId,
+          isActive: true,
+        },
+      });
+    }
+
+    console.log(`Organizational unit ensured: ${unit.name}`);
+  }
+
+  console.log(
+    "RBAC and organizational unit seeding completed successfully.",
+  );
 }
 
 main()
   .catch((error) => {
-    console.error("RBAC seeding failed:", error);
+    console.error("DWTRS seeding failed:", error);
     process.exit(1);
   })
   .finally(async () => {

@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:users": "tsx prisma/seed-test-users.ts",
     "test": "echo \"Tests not configured yet\""
   },
   "keywords": [],
