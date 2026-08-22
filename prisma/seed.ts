@@ -376,6 +376,20 @@ const organizationalUnits = [
     unitType: "GROUP" as const,
     parentName: "ICT Directorate",
   },
+  // ============================================================
+// HOUSING DEVELOPMENT — GROUPS
+// ============================================================
+
+{
+  name: "Group A",
+  unitType: "GROUP" as const,
+  parentName: "Project Monitoring Directorate",
+},
+{
+  name: "Group B",
+  unitType: "GROUP" as const,
+  parentName: "Land & Infrastructure Directorate",
+},
 ];
 
 async function main() {
