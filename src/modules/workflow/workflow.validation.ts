@@ -27,3 +27,21 @@ export const returnCaseSchema = z.object({
 });
 
 export type ReturnCaseInput = z.infer<typeof returnCaseSchema>;
+
+//transferring a case to another unit
+export const transferCaseSchema = z.object({
+  toUnitId: z.string().uuid(),
+  remarks: z.string().max(1000).optional(),
+});
+
+export type TransferCaseInput = z.infer<typeof transferCaseSchema>;
+
+
+export const reassignCaseSchema = z.object({
+  toUnitId: z.string().uuid(),
+  remarks: z.string().optional(),
+});
+
+export type ReassignCaseInput = z.infer<
+  typeof reassignCaseSchema
+>;
