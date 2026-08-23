@@ -1,4 +1,5 @@
 import prisma from "../../config/database";
+import { Prisma } from "../../generated/prisma/client";
 
 import type {
   AssignCaseInput,
@@ -425,7 +426,7 @@ function isValidForwardRoute(
 // ============================================================
 
 async function wasReturnedFromDestination(
-  tx: any,
+  tx:  Prisma.TransactionClient,
   caseId: string,
   currentUnitId: string,
   destinationUnitId: string,
@@ -795,6 +796,246 @@ function isValidReturnRoute(
   return false;
 }
 
+
+
+// ============================================================
+// MAKE CASE DECISION
+// ============================================================
+//
+// FINAL DECISION
+//
+// Only a SECTOR can make the final decision.
+//
+// Decision:
+//   APPROVED
+//   REJECTED
+//
+// Case status becomes:
+//   APPROVED
+//   REJECTED
+//
+// Workflow statuses such as:
+//   UNDER_REVIEW
+//   IN_PROGRESS
+//   PENDING_CLARIFICATION
+//   SENT_BACK_FOR_CORRECTION
+//
+// are NOT final decisions.
+//
+// ============================================================
+
+export async function makeCaseDecision(
+  caseId: string,
+  userId: string,
+  input: CaseDecisionInput,
+) {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // ========================================================
+    // 1. FIND CASE
+    // ========================================================
+
+    const caseRecord = await tx.case.findUnique({
+      where: {
+        caseId,
+      },
+    });
+
+    if (!caseRecord) {
+      throw new Error("Case not found.");
+    }
+
+    // ========================================================
+    // 2. FIND DECISION-MAKING USER
+    // ========================================================
+
+    const user = await tx.user.findUnique({
+      where: {
+        userId,
+      },
+      include: {
+        unit: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error(
+        "Decision-making user not found.",
+      );
+    }
+
+    if (!user.isActive) {
+      throw new Error(
+        "Decision-making user is inactive.",
+      );
+    }
+
+    // ========================================================
+    // 3. USER MUST BELONG TO AN ORGANIZATIONAL UNIT
+    // ========================================================
+
+    if (!user.unit) {
+      throw new Error(
+        "Decision-making user is not assigned to an organizational unit.",
+      );
+    }
+
+    // ========================================================
+    // 4. ONLY SECTOR CAN MAKE FINAL DECISION
+    // ========================================================
+
+    if (user.unit.unitType !== "SECTOR") {
+      throw new Error(
+        "Only Sector users can approve or reject cases.",
+      );
+    }
+
+    // ========================================================
+    // 5. CASE MUST CURRENTLY BELONG TO USER'S SECTOR
+    // ========================================================
+
+    if (caseRecord.currentUnitId !== user.unit.unitId) {
+      throw new Error(
+        "You can only make a decision on cases currently held by your organizational unit.",
+      );
+    }
+
+    // ========================================================
+    // 6. MAKE SURE CASE DOES NOT ALREADY HAVE A FINAL
+    //    DECISION
+    // ========================================================
+
+    const existingDecision =
+      await tx.decision.findFirst({
+        where: {
+          caseId,
+        },
+        orderBy: {
+          decidedAt: "desc",
+        },
+      });
+
+    if (existingDecision) {
+      throw new Error(
+        "A final decision has already been made for this case.",
+      );
+    }
+
+    // ========================================================
+    // 7. MAKE SURE CASE IS NOT ALREADY FINALIZED
+    // ========================================================
+
+    if (
+      caseRecord.status === "APPROVED" ||
+      caseRecord.status === "REJECTED"
+    ) {
+      throw new Error(
+        "Case is already finalized.",
+      );
+    }
+
+    // ========================================================
+    // 8. DETERMINE NEW CASE STATUS
+    // ========================================================
+
+    const newStatus =
+      input.decisionType === "APPROVED"
+        ? "APPROVED"
+        : "REJECTED";
+
+    // ========================================================
+    // 9. CREATE DECISION RECORD
+    // ========================================================
+
+    const decision = await tx.decision.create({
+      data: {
+        caseId,
+        decidedBy: userId,
+        decisionType: input.decisionType,
+        decisionText: input.decisionText,
+      },
+      include: {
+        decider: {
+          select: {
+            userId: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // ========================================================
+    // 10. UPDATE CASE STATUS
+    // ========================================================
+
+    const updatedCase = await tx.case.update({
+      where: {
+        caseId,
+      },
+      data: {
+        status: newStatus,
+        version: {
+          increment: 1,
+        },
+      },
+      include: {
+        customer: true,
+        currentUnit: true,
+      },
+    });
+
+    // ========================================================
+    // 11. STATUS HISTORY
+    // ========================================================
+
+    await tx.statusHistory.create({
+      data: {
+        caseId,
+        changedBy: userId,
+        status: newStatus,
+      },
+    });
+
+    // ========================================================
+    // 12. AUDIT LOG
+    // ========================================================
+
+    await tx.auditLog.create({
+      data: {
+        userId,
+        caseId,
+        action:
+          input.decisionType === "APPROVED"
+            ? "CASE_APPROVED"
+            : "CASE_REJECTED",
+        entityType: "CASE",
+        entityId: caseId,
+
+        oldValues: {
+          status: caseRecord.status,
+          currentUnitId: caseRecord.currentUnitId,
+        },
+
+        newValues: {
+          status: newStatus,
+          currentUnitId: caseRecord.currentUnitId,
+          decisionId: decision.decisionId,
+          decisionType: input.decisionType,
+          decisionText: input.decisionText ?? null,
+        },
+      },
+    });
+
+    // ========================================================
+    // 13. RETURN RESULT
+    // ========================================================
+
+    return {
+      case: updatedCase,
+      decision,
+    };
+  });
+}
 
 
 // ============================================================

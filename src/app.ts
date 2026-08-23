@@ -2,7 +2,7 @@ import express from "express";
 import authRoutes from "./modules/auth/auth.routes";
 import caseRoutes from "./modules/cases/case.routes";
 import workflowRoutes from "./modules/workflow/workflow.routes";
-
+import documentRoutes from "./modules/documents/document.route";
 
 const app = express();
 
@@ -23,4 +23,7 @@ app.use("/api/v1/cases", caseRoutes);
 app.use("/api/v1/workflow", workflowRoutes); //to what assign
 //http://localhost:5000/api/v1/workflow/cases/a8594008-49d2-4521-8e3d-c40f4d6bec49/assign
 //http://localhost:5000/api/v1/workflow/cases/a8594008-49d2-4521-8e3d-c40f4d6bec49/decision
+
+app.use("/api/v1/documents", documentRoutes);
+
 export default app;
