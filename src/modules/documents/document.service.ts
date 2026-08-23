@@ -14,9 +14,9 @@ export async function createDocument(
   input: CreateDocumentInput,
 ) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // --------------------------------------------------------
-    // 1. Check case exists
-    // --------------------------------------------------------
+    // ========================================================
+    // 1. CHECK CASE
+    // ========================================================
 
     const caseRecord = await tx.case.findUnique({
       where: {
@@ -28,9 +28,9 @@ export async function createDocument(
       throw new Error("Case not found.");
     }
 
-    // --------------------------------------------------------
-    // 2. Check user exists
-    // --------------------------------------------------------
+    // ========================================================
+    // 2. CHECK USER
+    // ========================================================
 
     const user = await tx.user.findUnique({
       where: {
@@ -46,25 +46,35 @@ export async function createDocument(
       throw new Error("User is inactive.");
     }
 
-    // --------------------------------------------------------
-    // 3. Create document
-    // --------------------------------------------------------
+    // ========================================================
+    // 3. CREATE DOCUMENT
+    // ========================================================
 
     const document = await tx.document.create({
       data: {
         caseId: input.caseId,
         documentType: input.documentType,
         title: input.title,
+
+        fileName: input.fileName,
+        storageKey: input.storageKey,
+        mimeType: input.mimeType,
+        fileSize: input.fileSize,
+
+        checksum: input.checksum ?? null,
+
+        uploadedBy: userId,
       },
+
       include: {
         case: true,
-        versions: true,
+        attachments: true,
       },
     });
 
-    // --------------------------------------------------------
-    // 4. Audit
-    // --------------------------------------------------------
+    // ========================================================
+    // 4. AUDIT
+    // ========================================================
 
     await tx.auditLog.create({
       data: {
@@ -81,6 +91,12 @@ export async function createDocument(
           caseId: input.caseId,
           documentType: input.documentType,
           title: input.title,
+          fileName: input.fileName,
+          storageKey: input.storageKey,
+          mimeType: input.mimeType,
+          fileSize: input.fileSize,
+          checksum: input.checksum ?? null,
+          uploadedBy: userId,
         },
       },
     });
@@ -100,26 +116,10 @@ export async function getDocumentById(
     where: {
       documentId,
     },
+
     include: {
       case: true,
-
-      versions: {
-        orderBy: {
-          versionNumber: "desc",
-        },
-
-        include: {
-          creator: {
-            select: {
-              userId: true,
-              name: true,
-              email: true,
-            },
-          },
-
-          attachments: true,
-        },
-      },
+      attachments: true,
     },
   });
 
@@ -137,9 +137,9 @@ export async function getDocumentById(
 export async function getDocumentsByCase(
   caseId: string,
 ) {
-  // ----------------------------------------------------------
-  // Check case exists
-  // ----------------------------------------------------------
+  // ========================================================
+  // CHECK CASE
+  // ========================================================
 
   const caseRecord = await prisma.case.findUnique({
     where: {
@@ -151,9 +151,9 @@ export async function getDocumentsByCase(
     throw new Error("Case not found.");
   }
 
-  // ----------------------------------------------------------
-  // Get documents
-  // ----------------------------------------------------------
+  // ========================================================
+  // GET DOCUMENTS
+  // ========================================================
 
   return prisma.document.findMany({
     where: {
@@ -165,15 +165,7 @@ export async function getDocumentsByCase(
     },
 
     include: {
-      versions: {
-        orderBy: {
-          versionNumber: "desc",
-        },
-
-        include: {
-          attachments: true,
-        },
-      },
+      attachments: true,
     },
   });
 }
@@ -188,9 +180,9 @@ export async function updateDocument(
   input: UpdateDocumentInput,
 ) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // --------------------------------------------------------
-    // 1. Find document
-    // --------------------------------------------------------
+    // ========================================================
+    // 1. FIND DOCUMENT
+    // ========================================================
 
     const existingDocument =
       await tx.document.findUnique({
@@ -203,9 +195,9 @@ export async function updateDocument(
       throw new Error("Document not found.");
     }
 
-    // --------------------------------------------------------
-    // 2. Check user
-    // --------------------------------------------------------
+    // ========================================================
+    // 2. CHECK USER
+    // ========================================================
 
     const user = await tx.user.findUnique({
       where: {
@@ -221,9 +213,9 @@ export async function updateDocument(
       throw new Error("User is inactive.");
     }
 
-    // --------------------------------------------------------
-    // 3. Update
-    // --------------------------------------------------------
+    // ========================================================
+    // 3. UPDATE DOCUMENT
+    // ========================================================
 
     const updatedDocument =
       await tx.document.update({
@@ -239,17 +231,37 @@ export async function updateDocument(
           ...(input.title !== undefined && {
             title: input.title,
           }),
+
+          ...(input.fileName !== undefined && {
+            fileName: input.fileName,
+          }),
+
+          ...(input.storageKey !== undefined && {
+            storageKey: input.storageKey,
+          }),
+
+          ...(input.mimeType !== undefined && {
+            mimeType: input.mimeType,
+          }),
+
+          ...(input.fileSize !== undefined && {
+            fileSize: input.fileSize,
+          }),
+
+          ...(input.checksum !== undefined && {
+            checksum: input.checksum,
+          }),
         },
 
         include: {
           case: true,
-          versions: true,
+          attachments: true,
         },
       });
 
-    // --------------------------------------------------------
-    // 4. Audit
-    // --------------------------------------------------------
+    // ========================================================
+    // 4. AUDIT
+    // ========================================================
 
     await tx.auditLog.create({
       data: {
@@ -260,15 +272,23 @@ export async function updateDocument(
         entityId: documentId,
 
         oldValues: {
-          documentType:
-            existingDocument.documentType,
+          documentType: existingDocument.documentType,
           title: existingDocument.title,
+          fileName: existingDocument.fileName,
+          storageKey: existingDocument.storageKey,
+          mimeType: existingDocument.mimeType,
+          fileSize: existingDocument.fileSize.toString(),
+          checksum: existingDocument.checksum,
         },
 
         newValues: {
-          documentType:
-            updatedDocument.documentType,
+          documentType: updatedDocument.documentType,
           title: updatedDocument.title,
+          fileName: updatedDocument.fileName,
+          storageKey: updatedDocument.storageKey,
+          mimeType: updatedDocument.mimeType,
+          fileSize: updatedDocument.fileSize.toString(),
+          checksum: updatedDocument.checksum,
         },
       },
     });
@@ -286,9 +306,9 @@ export async function deleteDocument(
   userId: string,
 ) {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // --------------------------------------------------------
-    // 1. Find document
-    // --------------------------------------------------------
+    // ========================================================
+    // 1. FIND DOCUMENT
+    // ========================================================
 
     const existingDocument =
       await tx.document.findUnique({
@@ -297,11 +317,7 @@ export async function deleteDocument(
         },
 
         include: {
-          versions: {
-            include: {
-              attachments: true,
-            },
-          },
+          attachments: true,
         },
       });
 
@@ -309,9 +325,9 @@ export async function deleteDocument(
       throw new Error("Document not found.");
     }
 
-    // --------------------------------------------------------
-    // 2. Check user
-    // --------------------------------------------------------
+    // ========================================================
+    // 2. CHECK USER
+    // ========================================================
 
     const user = await tx.user.findUnique({
       where: {
@@ -327,18 +343,9 @@ export async function deleteDocument(
       throw new Error("User is inactive.");
     }
 
-    // --------------------------------------------------------
-    // 3. Delete document
-    //
-    // Cascade will delete:
-    //
-    // Document
-    //   ↓
-    // DocumentVersion
-    //   ↓
-    // Attachment
-    //
-    // --------------------------------------------------------
+    // ========================================================
+    // 3. DELETE DOCUMENT
+    // ========================================================
 
     await tx.document.delete({
       where: {
@@ -346,9 +353,9 @@ export async function deleteDocument(
       },
     });
 
-    // --------------------------------------------------------
-    // 4. Audit
-    // --------------------------------------------------------
+    // ========================================================
+    // 4. AUDIT
+    // ========================================================
 
     await tx.auditLog.create({
       data: {
@@ -359,13 +366,15 @@ export async function deleteDocument(
         entityId: documentId,
 
         oldValues: {
-          documentType:
-            existingDocument.documentType,
-
+          documentType: existingDocument.documentType,
           title: existingDocument.title,
-
-          versionCount:
-            existingDocument.versions.length,
+          fileName: existingDocument.fileName,
+          storageKey: existingDocument.storageKey,
+          mimeType: existingDocument.mimeType,
+          fileSize: existingDocument.fileSize.toString(),
+          checksum: existingDocument.checksum,
+          attachmentCount:
+            existingDocument.attachments.length,
         },
 
         newValues: Prisma.JsonNull,

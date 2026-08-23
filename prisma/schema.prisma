@@ -1,6 +1,6 @@
 // ============================================================
 // DWTRS - Document Workflow Tracking and Reporting System
-// Final Frozen Database Schema
+// Final Database Schema
 // PostgreSQL + Prisma 7
 // ============================================================
 
@@ -81,11 +81,11 @@ model Case {
   subject             String     @db.VarChar(500)
   status              CaseStatus @default(SUBMITTED)
   currentUnitId       String?    @db.Uuid
+  version             Int        @default(1)
   submittedAt         DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
-  version             Int        @default(1)
 
-  customer Customer @relation(fields: [customerId], references: [customerId], onDelete: Restrict, onUpdate: Cascade)
+  customer Customer @relation(fields: [customerId], references: [customerId], onDelete: Restrict,onUpdate: Cascade)
 
   currentUnit OrganizationalUnit? @relation("CurrentCaseUnit", fields: [currentUnitId], references: [unitId], onDelete: SetNull, onUpdate: Cascade)
 
@@ -116,67 +116,59 @@ model Document {
   documentType String @db.VarChar(100)
   title        String @db.VarChar(255)
 
+  fileName   String @db.VarChar(255)
+  storageKey String @db.VarChar(500)
+  mimeType   String @db.VarChar(100)
+  fileSize   BigInt
+  checksum   String? @db.VarChar(128)
+
+  uploadedBy String @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade, onUpdate: Cascade)
 
-  versions DocumentVersion[]
+  uploader User @relation("DocumentUploader", fields: [uploadedBy], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+
+  attachments Attachment[]
 
   @@index([caseId])
+  @@index([uploadedBy])
+  @@index([checksum])
   @@map("document")
 }
 
 // ============================================================
-// 4. DOCUMENT VERSION
-// ============================================================
-
-model DocumentVersion {
-  versionId String @id @default(uuid()) @db.Uuid
-
-  documentId    String @db.Uuid
-  versionNumber Int
-  createdBy     String @db.Uuid
-
-  createdAt DateTime @default(now())
-
-  document Document @relation(fields: [documentId], references: [documentId], onDelete: Cascade, onUpdate: Cascade)
-
-  creator User @relation("DocumentVersionCreator", fields: [createdBy], references: [userId], onDelete: Restrict, onUpdate: Cascade)
-
-  attachments Attachment[]
-
-  @@unique([documentId, versionNumber])
-  @@index([createdBy])
-  @@map("document_version")
-}
-
-// ============================================================
-// 5. ATTACHMENT
+// 4. ATTACHMENT
 // ============================================================
 
 model Attachment {
   attachmentId String @id @default(uuid()) @db.Uuid
 
-  versionId String @db.Uuid
+  documentId String @db.Uuid
 
-  fileName   String  @db.VarChar(255)
-  storageKey String  @db.VarChar(500)
-  mimeType   String  @db.VarChar(100)
+  fileName   String @db.VarChar(255)
+  storageKey String @db.VarChar(500)
+  mimeType   String @db.VarChar(100)
   fileSize   BigInt
   checksum   String? @db.VarChar(128)
 
+  uploadedBy String   @db.Uuid
   uploadedAt DateTime @default(now())
 
-  version DocumentVersion @relation(fields: [versionId], references: [versionId], onDelete: Cascade, onUpdate: Cascade)
+  document Document @relation(fields: [documentId], references: [documentId], onDelete: Cascade, onUpdate: Cascade)
 
-  @@index([versionId])
+  uploader User @relation("AttachmentUploader", fields: [uploadedBy], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([documentId])
+  @@index([uploadedBy])
   @@index([checksum])
   @@map("attachment")
 }
 
 // ============================================================
-// 6. ORGANIZATIONAL UNIT
+// 5. ORGANIZATIONAL UNIT
 // ============================================================
 
 model OrganizationalUnit {
@@ -209,7 +201,7 @@ model OrganizationalUnit {
 }
 
 // ============================================================
-// 7. USER
+// 6. USER
 // ============================================================
 
 model User {
@@ -226,7 +218,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  unit OrganizationalUnit? @relation(fields: [unitId], references: [unitId], onDelete: Restrict, onUpdate: Cascade)
+  unit OrganizationalUnit? @relation(fields: [unitId], references: [unitId], onDelete: Restrict,onUpdate: Cascade)
 
   roles UserRole[]
 
@@ -238,7 +230,9 @@ model User {
 
   decisions Decision[] @relation("DecisionMadeBy")
 
-  documentVersions DocumentVersion[] @relation("DocumentVersionCreator")
+  uploadedDocuments Document[] @relation("DocumentUploader")
+
+  uploadedAttachments Attachment[] @relation("AttachmentUploader")
 
   auditLogs AuditLog[]
 
@@ -250,7 +244,7 @@ model User {
 }
 
 // ============================================================
-// 8. ROLE
+// 7. ROLE
 // ============================================================
 
 model Role {
@@ -270,7 +264,7 @@ model Role {
 }
 
 // ============================================================
-// 9. PERMISSION
+// 8. PERMISSION
 // ============================================================
 
 model Permission {
@@ -289,7 +283,7 @@ model Permission {
 }
 
 // ============================================================
-// 10. USER ROLE
+// 9. USER ROLE
 // ============================================================
 
 model UserRole {
@@ -298,7 +292,7 @@ model UserRole {
 
   assignedAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: Cascade)
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade,onUpdate: Cascade)
 
   role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade, onUpdate: Cascade)
 
@@ -308,7 +302,7 @@ model UserRole {
 }
 
 // ============================================================
-// 11. ROLE PERMISSION
+// 10. ROLE PERMISSION
 // ============================================================
 
 model RolePermission {
@@ -317,7 +311,7 @@ model RolePermission {
 
   role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade, onUpdate: Cascade)
 
-  permission Permission @relation(fields: [permissionId], references: [permissionId], onDelete: Cascade, onUpdate: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [permissionId], onDelete: Cascade,onUpdate: Cascade)
 
   @@id([roleId, permissionId])
   @@index([permissionId])
@@ -325,7 +319,7 @@ model RolePermission {
 }
 
 // ============================================================
-// 12. WORKFLOW ASSIGNMENT
+// 11. WORKFLOW ASSIGNMENT
 // ============================================================
 
 model WorkflowAssignment {
@@ -344,15 +338,15 @@ model WorkflowAssignment {
   assignedAt  DateTime  @default(now())
   completedAt DateTime?
 
-  case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade, onUpdate: Cascade)
+  case Case @relation(fields: [caseId], references: [caseId],onDelete: Cascade,onUpdate: Cascade)
 
-  fromUnit OrganizationalUnit? @relation("AssignmentFromUnit", fields: [fromUnitId], references: [unitId], onDelete: Restrict, onUpdate: Cascade)
+  fromUnit OrganizationalUnit? @relation("AssignmentFromUnit", fields: [fromUnitId], references: [unitId], onDelete: Restrict,onUpdate: Cascade)
 
-  toUnit OrganizationalUnit @relation("AssignmentToUnit", fields: [toUnitId], references: [unitId], onDelete: Restrict, onUpdate: Cascade)
+  toUnit OrganizationalUnit @relation("AssignmentToUnit", fields: [toUnitId],references: [unitId],onDelete: Restrict,onUpdate: Cascade)
 
   assigner User @relation("AssignmentPerformedBy", fields: [assignedBy], references: [userId], onDelete: Restrict, onUpdate: Cascade)
 
-  remarksHistory Remark[]
+  remarksHistory Remark[] @relation("AssignmentRemarks")
 
   @@index([caseId])
   @@index([fromUnitId])
@@ -364,7 +358,7 @@ model WorkflowAssignment {
 }
 
 // ============================================================
-// 13. STATUS HISTORY
+// 12. STATUS HISTORY
 // ============================================================
 
 model StatusHistory {
@@ -375,7 +369,7 @@ model StatusHistory {
   status    CaseStatus
   changedAt DateTime   @default(now())
 
-  case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade, onUpdate: Cascade)
+  case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade,onUpdate: Cascade)
 
   changer User @relation("StatusChangedBy", fields: [changedBy], references: [userId], onDelete: Restrict, onUpdate: Cascade)
 
@@ -387,7 +381,7 @@ model StatusHistory {
 }
 
 // ============================================================
-// 14. REMARK
+// 13. REMARK
 // ============================================================
 
 model Remark {
@@ -401,11 +395,11 @@ model Remark {
 
   createdAt DateTime @default(now())
 
-  case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade, onUpdate: Cascade)
+  case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade,onUpdate: Cascade)
 
-  user User @relation(fields: [userId], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  user User @relation(fields: [userId], references: [userId], onDelete: Restrict,onUpdate: Cascade)
 
-  assignment WorkflowAssignment? @relation(fields: [assignmentId], references: [assignmentId], onDelete: SetNull, onUpdate: Cascade)
+  assignment WorkflowAssignment? @relation("AssignmentRemarks", fields: [assignmentId],references: [assignmentId], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([caseId])
   @@index([userId])
@@ -414,7 +408,7 @@ model Remark {
 }
 
 // ============================================================
-// 15. DECISION
+// 14. DECISION
 // ============================================================
 
 model Decision {
@@ -429,7 +423,7 @@ model Decision {
 
   case Case @relation(fields: [caseId], references: [caseId], onDelete: Cascade, onUpdate: Cascade)
 
-  decider User @relation("DecisionMadeBy", fields: [decidedBy], references: [userId], onDelete: Restrict, onUpdate: Cascade)
+  decider User @relation("DecisionMadeBy", fields: [decidedBy], references: [userId], onDelete: Restrict,onUpdate: Cascade)
 
   @@index([caseId])
   @@index([decidedBy])
@@ -439,7 +433,7 @@ model Decision {
 }
 
 // ============================================================
-// 16. AUDIT LOG
+// 15. AUDIT LOG
 // ============================================================
 
 model AuditLog {
@@ -472,7 +466,7 @@ model AuditLog {
 }
 
 // ============================================================
-// 17. NOTIFICATION
+// 16. NOTIFICATION
 // ============================================================
 
 model Notification {

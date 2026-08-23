@@ -259,7 +259,7 @@ export async function assignCase(
     // ============================================================
     // 12. Update case location and status
     // ============================================================
-
+    console.log("VERSION BEFORE RETURN:", caseRecord.version);
     const updatedCase = await tx.case.update({
       where: {
         caseId,
@@ -276,6 +276,7 @@ export async function assignCase(
         currentUnit: true,
       },
     });
+    console.log("VERSION AFTER RETURN:", updatedCase.version);
 
     // ============================================================
     // 13. Record status history
@@ -1314,6 +1315,7 @@ export async function reassignCase(
   userId: string,
   input: ReassignCaseInput,
 ) {
+
   return prisma.$transaction(async (tx) => {
     // ========================================================
     // 1. Find case

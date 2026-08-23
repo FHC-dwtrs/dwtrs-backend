@@ -13,7 +13,10 @@ import {
 
 const router = Router();
 
-// CREATE
+// ============================================================
+// CREATE DOCUMENT
+// ============================================================
+
 router.post(
   "/",
   authenticate,
@@ -21,15 +24,11 @@ router.post(
   createDocumentController,
 );
 
-// GET ONE
-router.get(
-  "/:documentId",
-  authenticate,
-  authorize("DOCUMENT_VIEW"),
-  getDocumentByIdController,
-);
+// ============================================================
+// GET DOCUMENTS BY CASE
+// IMPORTANT: Must come BEFORE /:documentId
+// ============================================================
 
-// GET CASE DOCUMENTS
 router.get(
   "/case/:caseId",
   authenticate,
@@ -37,7 +36,24 @@ router.get(
   getDocumentsByCaseController,
 );
 
-// UPDATE
+
+
+
+// ============================================================
+// GET ONE DOCUMENT
+// ============================================================
+
+router.get(
+  "/:documentId",
+  authenticate,
+  authorize("DOCUMENT_VIEW"),
+  getDocumentByIdController,
+);
+
+// ============================================================
+// UPDATE DOCUMENT
+// ============================================================
+
 router.patch(
   "/:documentId",
   authenticate,
@@ -45,7 +61,10 @@ router.patch(
   updateDocumentController,
 );
 
-// DELETE
+// ============================================================
+// DELETE DOCUMENT
+// ============================================================
+
 router.delete(
   "/:documentId",
   authenticate,
