@@ -3,6 +3,7 @@ import authRoutes from "./modules/auth/auth.routes";
 import caseRoutes from "./modules/cases/case.routes";
 import workflowRoutes from "./modules/workflow/workflow.routes";
 import documentRoutes from "./modules/documents/document.route";
+import notificationRoutes from "./modules/notifications/notification.route";
 
 const app = express();
 
@@ -26,5 +27,6 @@ app.use("/api/v1/workflow", workflowRoutes); //to what assign
 
 app.use("/api/v1", documentRoutes);
 
+app.use("/api/v1", notificationRoutes);
 
 export default app;

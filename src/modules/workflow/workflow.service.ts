@@ -1,6 +1,6 @@
 import prisma from "../../config/database";
 import { Prisma } from "../../generated/prisma/client";
-
+import { notifyUnitUsers } from "../notifications/notification.service";
 import type {
   AssignCaseInput,
   CaseDecisionInput,
@@ -260,6 +260,13 @@ export async function assignCase(
           assignmentId: assignment.assignmentId,
         },
       },
+    });
+    await notifyUnitUsers(tx, {
+      unitId: input.toUnitId,
+      caseId,
+      notificationType: "CASE_ASSIGNED",
+      title: "New Case Assigned",
+      message: `Case ${caseRecord.trackingNumber} has been assigned to your unit.`,
     });
 
     return {
@@ -613,6 +620,16 @@ export async function returnCase(
         },
       },
     });
+    await notifyUnitUsers(tx, {
+      unitId: destinationUnit.unitId,
+      caseId,
+      notificationType: "CASE_RETURNED",
+      title: "Case Returned for Correction",
+      message: input.remarks
+        ? `Case ${caseRecord.trackingNumber} has been returned for correction. Reason: ${input.remarks}`
+        : `Case ${caseRecord.trackingNumber} has been returned for correction.`,
+    });
+
 
     return {
       case: updatedCase,
@@ -990,6 +1007,13 @@ export async function reassignCase(
         },
       },
     });
+    await notifyUnitUsers(tx, {
+      unitId: toUnit.unitId,
+      caseId,
+      notificationType: "CASE_REASSIGNED",
+      title: "Case Reassigned",
+      message: `Case ${caseRecord.trackingNumber} has been reassigned to your unit.`,
+    });
 
     return {
       case: updatedCase,
@@ -1258,6 +1282,34 @@ export async function makeCaseDecision(
           },
         },
       });
+      const recordsArchive =
+  await tx.organizationalUnit.findFirst({
+    where: {
+      name: RECORDS_ARCHIVE_NAME,
+      unitType: "DIRECTORATE",
+      isActive: true,
+    },
+  });
+
+if (recordsArchive) {
+  await notifyUnitUsers(tx, {
+    unitId: recordsArchive.unitId,
+    caseId,
+    notificationType:
+      input.decisionType === "APPROVED"
+        ? "CASE_APPROVED"
+        : "CASE_REJECTED",
+    title:
+      input.decisionType === "APPROVED"
+        ? "Case Approved"
+        : "Case Rejected",
+    message:
+      input.decisionType === "APPROVED"
+        ? `Case ${caseRecord.trackingNumber} has been approved.`
+        : `Case ${caseRecord.trackingNumber} has been rejected.`,
+  });
+}
+
 
       return {
         case: updatedCase,
@@ -1511,6 +1563,13 @@ export async function transferCase(
             "DIRECTORATE_TO_DIRECTORATE",
         },
       },
+    });
+    await notifyUnitUsers(tx, {
+      unitId: toUnit.unitId,
+      caseId,
+      notificationType: "CASE_TRANSFERRED",
+      title: "Case Transferred",
+      message: `Case ${caseRecord.trackingNumber} has been transferred to your Directorate.`,
     });
 
     return {
