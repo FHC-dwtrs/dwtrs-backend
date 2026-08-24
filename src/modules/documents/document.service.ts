@@ -169,7 +169,6 @@ export const getDocumentFile = async (
 
 /////delete
 
-
 export const deleteDocument = async (
   caseId: string,
   documentId: string,
@@ -200,21 +199,64 @@ export const deleteDocument = async (
   }
 
   // ----------------------------------------------------------
-  // 3. Soft delete the document
+  // 3. Soft delete document + create audit log
   // ----------------------------------------------------------
-  // We DO NOT delete the physical file.
-  // The document remains available for audit/history purposes.
 
-  const deletedDocument = await prisma.document.update({
-    where: {
-      documentId,
-    },
-    data: {
-      deletedAt: new Date(),
-      deletedBy,
-      deletionReason,
-    },
+  const deletedAt = new Date();
+
+  const result = await prisma.$transaction(async (tx) => {
+    // --------------------------------------------------------
+    // Soft delete the document
+    // --------------------------------------------------------
+
+    const deletedDocument = await tx.document.update({
+      where: {
+        documentId,
+      },
+      data: {
+        deletedAt,
+        deletedBy,
+        deletionReason,
+      },
+    });
+
+    // --------------------------------------------------------
+    // Create audit log
+    // --------------------------------------------------------
+
+    await tx.auditLog.create({
+      data: {
+        userId: deletedBy,
+        caseId,
+
+        action: "DOCUMENT_DELETE",
+        entityType: "DOCUMENT",
+        entityId: documentId,
+
+        oldValues: {
+          documentId: document.documentId,
+          caseId: document.caseId,
+          documentType: document.documentType,
+          title: document.title,
+          fileName: document.fileName,
+          storageKey: document.storageKey,
+          mimeType: document.mimeType,
+          fileSize: document.fileSize.toString(),
+          checksum: document.checksum,
+          uploadedBy: document.uploadedBy,
+          createdAt: document.createdAt.toISOString(),
+        },
+
+        newValues: {
+          deletedAt: deletedAt.toISOString(),
+          deletedBy,
+          deletionReason,
+        },
+      },
+    });
+
+    return deletedDocument;
   });
 
-  return deletedDocument;
+  return result;
 };
