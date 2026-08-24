@@ -10,6 +10,7 @@ import {
   deleteDocumentController,
   getDocumentController,
   getDocumentsByCaseController,
+  updateDocumentController,
 } from "./document.controller";
 
 import {
@@ -17,6 +18,7 @@ import {
   deleteAttachmentController,
   getAttachmentController,
   getAttachmentsByDocumentController,
+  updateAttachmentController,
 } from "./attachment.controller";
 import { requireRecordsArchive } from "../../middleware/requireRecordsArchive";
 
@@ -60,6 +62,18 @@ router.get(
   authenticate,
   //requireCaseAccess,
   getDocumentController,
+);
+
+// ============================================================
+// UPDATE DOCUMENT
+// ============================================================
+
+router.patch(
+  "/cases/:caseId/documents/:documentId",
+  authenticate,
+  authorize("DOCUMENT_UPDATE"),
+  uploadDocument.single("file"),
+  updateDocumentController,
 );
 
 // ------------------------------------------------------------
@@ -115,6 +129,19 @@ router.get(
   getAttachmentController,
 );
 
+
+// ============================================================
+// UPDATE / REPLACE ATTACHMENT
+// ============================================================
+
+router.patch(
+  "/cases/:caseId/documents/:documentId/attachments/:attachmentId",
+  authenticate,
+  authorize("ATTACHMENT_UPDATE"),
+  uploadDocument.single("file"),
+  updateAttachmentController,
+);
+
 // ============================================================
 // DELETE ATTACHMENT
 // ============================================================
@@ -126,5 +153,7 @@ router.delete(
   authorize("ATTACHMENT_DELETE"),
   deleteAttachmentController,
 );
+
+
 
 export default router;

@@ -1,8 +1,12 @@
 import fs from "fs/promises";
 import crypto from "crypto";
 import path from "path";
-
+import { Prisma } from "../../generated/prisma/client";
 import prisma from "../../config/database";
+
+import {
+  UpdateDocumentInput,
+} from "./document.validation";
 
 interface CreateDocumentInput {
   caseId: string;
@@ -12,7 +16,13 @@ interface CreateDocumentInput {
   uploadedBy: string;
 }
 
-const calculateChecksum = async (filePath: string): Promise<string> => {
+// ============================================================
+// CHECKSUM
+// ============================================================
+
+const calculateChecksum = async (
+  filePath: string,
+): Promise<string> => {
   const fileBuffer = await fs.readFile(filePath);
 
   return crypto
@@ -20,6 +30,10 @@ const calculateChecksum = async (filePath: string): Promise<string> => {
     .update(fileBuffer)
     .digest("hex");
 };
+
+// ============================================================
+// CREATE DOCUMENT
+// ============================================================
 
 export const createDocument = async (
   input: CreateDocumentInput,
@@ -32,10 +46,6 @@ export const createDocument = async (
     uploadedBy,
   } = input;
 
-  // ----------------------------------------------------------
-  // 1. Check that the case exists
-  // ----------------------------------------------------------
-
   const existingCase = await prisma.case.findUnique({
     where: {
       caseId,
@@ -46,47 +56,68 @@ export const createDocument = async (
     throw new Error("Case not found");
   }
 
-  // ----------------------------------------------------------
-  // 2. Make sure a file was uploaded
-  // ----------------------------------------------------------
-
   if (!file) {
     throw new Error("Document file is required");
   }
 
-  // ----------------------------------------------------------
-  // 3. Calculate SHA-256 checksum
-  // ----------------------------------------------------------
-
-  const checksum = await calculateChecksum(file.path);
+  const checksum = await calculateChecksum(
+    file.path,
+  );
 
   try {
-    // --------------------------------------------------------
-    // 4. Create the document database record
-    // --------------------------------------------------------
+    const document = await prisma.$transaction(
+      async (tx) => {
+        const createdDocument =
+          await tx.document.create({
+            data: {
+              caseId,
+              documentType,
+              title,
 
-    const document = await prisma.document.create({
-      data: {
-        caseId,
-        documentType,
-        title,
+              fileName: file.originalname,
+              storageKey: file.path,
+              mimeType: file.mimetype,
+              fileSize: BigInt(file.size),
+              checksum,
 
-        fileName: file.originalname,
-        storageKey: file.path,
-        mimeType: file.mimetype,
-        fileSize: BigInt(file.size),
-        checksum,
+              uploadedBy,
+            },
+          });
 
-        uploadedBy,
+        await tx.auditLog.create({
+          data: {
+            userId: uploadedBy,
+            caseId,
+
+            action: "DOCUMENT_CREATE",
+            entityType: "DOCUMENT",
+            entityId:
+              createdDocument.documentId,
+
+            oldValues: Prisma.JsonNull,
+
+            newValues: {
+              documentId:
+                createdDocument.documentId,
+              caseId,
+              documentType,
+              title,
+              fileName: file.originalname,
+              storageKey: file.path,
+              mimeType: file.mimetype,
+              fileSize: file.size,
+              checksum,
+              uploadedBy,
+            },
+          },
+        });
+
+        return createdDocument;
       },
-    });
+    );
 
     return document;
   } catch (error) {
-    // --------------------------------------------------------
-    // 5. Database failed → remove uploaded physical file
-    // --------------------------------------------------------
-
     try {
       await fs.unlink(file.path);
     } catch (cleanupError) {
@@ -100,7 +131,13 @@ export const createDocument = async (
   }
 };
 
-export const getDocumentsByCase = async (caseId: string) => {
+// ============================================================
+// GET DOCUMENTS
+// ============================================================
+
+export const getDocumentsByCase = async (
+  caseId: string,
+) => {
   const existingCase = await prisma.case.findUnique({
     where: {
       caseId,
@@ -111,14 +148,16 @@ export const getDocumentsByCase = async (caseId: string) => {
     throw new Error("Case not found");
   }
 
-  const documents = await prisma.document.findMany({
+  return prisma.document.findMany({
     where: {
       caseId,
       deletedAt: null,
     },
+
     orderBy: {
       createdAt: "desc",
     },
+
     select: {
       documentId: true,
       caseId: true,
@@ -127,37 +166,45 @@ export const getDocumentsByCase = async (caseId: string) => {
       fileName: true,
       mimeType: true,
       fileSize: true,
+      checksum: true,
       uploadedBy: true,
       createdAt: true,
       updatedAt: true,
     },
   });
-
-  return documents;
 };
+
+// ============================================================
+// GET DOCUMENT FILE
+// ============================================================
 
 export const getDocumentFile = async (
   caseId: string,
   documentId: string,
 ) => {
-  const document = await prisma.document.findFirst({
-    where: {
-      documentId,
-      caseId,
-      deletedAt: null,
-    },
-  });
+  const document =
+    await prisma.document.findFirst({
+      where: {
+        documentId,
+        caseId,
+        deletedAt: null,
+      },
+    });
 
   if (!document) {
     throw new Error("Document not found");
   }
 
-  const filePath = path.resolve(document.storageKey);
+  const filePath = path.resolve(
+    document.storageKey,
+  );
 
   try {
     await fs.access(filePath);
   } catch {
-    throw new Error("Document file not found");
+    throw new Error(
+      "Document file not found",
+    );
   }
 
   return {
@@ -166,8 +213,193 @@ export const getDocumentFile = async (
   };
 };
 
+// ============================================================
+// UPDATE DOCUMENT
+//
+// Updates metadata and optionally replaces the file.
+// ============================================================
 
-/////delete
+export const updateDocument = async (
+  caseId: string,
+  documentId: string,
+  input: UpdateDocumentInput,
+  updatedBy: string,
+  file?: Express.Multer.File,
+) => {
+  // ----------------------------------------------------------
+  // 1. FIND DOCUMENT
+  // ----------------------------------------------------------
+
+  const document =
+    await prisma.document.findFirst({
+      where: {
+        documentId,
+        caseId,
+        deletedAt: null,
+      },
+    });
+
+  if (!document) {
+    throw new Error("Document not found");
+  }
+
+  // ----------------------------------------------------------
+  // 2. PREPARE FILE INFORMATION
+  // ----------------------------------------------------------
+
+  let checksum: string | null =
+    document.checksum;
+
+  let newStorageKey = document.storageKey;
+  let newFileName = document.fileName;
+  let newMimeType = document.mimeType;
+  let newFileSize = document.fileSize;
+
+  if (file) {
+    checksum = await calculateChecksum(
+      file.path,
+    );
+
+    newStorageKey = file.path;
+    newFileName = file.originalname;
+    newMimeType = file.mimetype;
+    newFileSize = BigInt(file.size);
+  }
+
+  // ----------------------------------------------------------
+  // 3. OLD VALUES
+  // ----------------------------------------------------------
+
+  const oldValues = {
+    documentId: document.documentId,
+    caseId: document.caseId,
+    documentType: document.documentType,
+    title: document.title,
+    fileName: document.fileName,
+    storageKey: document.storageKey,
+    mimeType: document.mimeType,
+    fileSize: document.fileSize.toString(),
+    checksum: document.checksum,
+    uploadedBy: document.uploadedBy,
+  };
+
+  try {
+    const updatedDocument =
+      await prisma.$transaction(
+        async (tx) => {
+          const updated =
+            await tx.document.update({
+              where: {
+                documentId,
+              },
+
+              data: {
+                ...(input.documentType !==
+                  undefined && {
+                  documentType:
+                    input.documentType,
+                }),
+
+                ...(input.title !== undefined && {
+                  title: input.title,
+                }),
+
+                ...(file && {
+                  storageKey: newStorageKey,
+                  fileName: newFileName,
+                  mimeType: newMimeType,
+                  fileSize: newFileSize,
+                  checksum,
+                  uploadedBy: updatedBy,
+                }),
+              },
+            });
+
+          // ------------------------------------------------
+          // AUDIT
+          // ------------------------------------------------
+
+          await tx.auditLog.create({
+            data: {
+              userId: updatedBy,
+              caseId,
+
+              action: "DOCUMENT_UPDATE",
+              entityType: "DOCUMENT",
+              entityId: documentId,
+
+              oldValues,
+
+              newValues: {
+                documentId:
+                  updated.documentId,
+                caseId:
+                  updated.caseId,
+                documentType:
+                  updated.documentType,
+                title: updated.title,
+                fileName:
+                  updated.fileName,
+                storageKey:
+                  updated.storageKey,
+                mimeType:
+                  updated.mimeType,
+                fileSize:
+                  updated.fileSize.toString(),
+                checksum:
+                  updated.checksum,
+                uploadedBy:
+                  updated.uploadedBy,
+              },
+            },
+          });
+
+          return updated;
+        },
+      );
+
+    // --------------------------------------------------------
+    // REMOVE OLD PHYSICAL FILE ONLY AFTER DB SUCCESS
+    // --------------------------------------------------------
+
+    if (
+      file &&
+      document.storageKey !==
+        updatedDocument.storageKey
+    ) {
+      try {
+        await fs.unlink(
+          path.resolve(document.storageKey),
+        );
+      } catch (cleanupError) {
+        console.error(
+          "Failed to remove old document file:",
+          cleanupError,
+        );
+      }
+    }
+
+    return updatedDocument;
+  } catch (error) {
+    // Database failed → remove NEW uploaded file.
+    if (file) {
+      try {
+        await fs.unlink(file.path);
+      } catch (cleanupError) {
+        console.error(
+          "Failed to remove replacement file after database error:",
+          cleanupError,
+        );
+      }
+    }
+
+    throw error;
+  }
+};
+
+// ============================================================
+// DELETE DOCUMENT
+// ============================================================
 
 export const deleteDocument = async (
   caseId: string,
@@ -175,88 +407,83 @@ export const deleteDocument = async (
   deletedBy: string,
   deletionReason: string,
 ) => {
-  // ----------------------------------------------------------
-  // 1. Find the document
-  // ----------------------------------------------------------
-
-  const document = await prisma.document.findFirst({
-    where: {
-      documentId,
-      caseId,
-    },
-  });
+  const document =
+    await prisma.document.findFirst({
+      where: {
+        documentId,
+        caseId,
+      },
+    });
 
   if (!document) {
     throw new Error("Document not found");
   }
 
-  // ----------------------------------------------------------
-  // 2. Make sure the document is not already deleted
-  // ----------------------------------------------------------
-
   if (document.deletedAt) {
     throw new Error("Document already deleted");
   }
 
-  // ----------------------------------------------------------
-  // 3. Soft delete document + create audit log
-  // ----------------------------------------------------------
-
   const deletedAt = new Date();
 
-  const result = await prisma.$transaction(async (tx) => {
-    // --------------------------------------------------------
-    // Soft delete the document
-    // --------------------------------------------------------
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const deletedDocument =
+        await tx.document.update({
+          where: {
+            documentId,
+          },
 
-    const deletedDocument = await tx.document.update({
-      where: {
-        documentId,
-      },
-      data: {
-        deletedAt,
-        deletedBy,
-        deletionReason,
-      },
-    });
+          data: {
+            deletedAt,
+            deletedBy,
+            deletionReason,
+          },
+        });
 
-    // --------------------------------------------------------
-    // Create audit log
-    // --------------------------------------------------------
+      await tx.auditLog.create({
+        data: {
+          userId: deletedBy,
+          caseId,
 
-    await tx.auditLog.create({
-      data: {
-        userId: deletedBy,
-        caseId,
+          action: "DOCUMENT_DELETE",
+          entityType: "DOCUMENT",
+          entityId: documentId,
 
-        action: "DOCUMENT_DELETE",
-        entityType: "DOCUMENT",
-        entityId: documentId,
+          oldValues: {
+            documentId:
+              document.documentId,
+            caseId: document.caseId,
+            documentType:
+              document.documentType,
+            title: document.title,
+            fileName:
+              document.fileName,
+            storageKey:
+              document.storageKey,
+            mimeType:
+              document.mimeType,
+            fileSize:
+              document.fileSize.toString(),
+            checksum:
+              document.checksum,
+            uploadedBy:
+              document.uploadedBy,
+            createdAt:
+              document.createdAt.toISOString(),
+          },
 
-        oldValues: {
-          documentId: document.documentId,
-          caseId: document.caseId,
-          documentType: document.documentType,
-          title: document.title,
-          fileName: document.fileName,
-          storageKey: document.storageKey,
-          mimeType: document.mimeType,
-          fileSize: document.fileSize.toString(),
-          checksum: document.checksum,
-          uploadedBy: document.uploadedBy,
-          createdAt: document.createdAt.toISOString(),
+          newValues: {
+            deletedAt:
+              deletedAt.toISOString(),
+            deletedBy,
+            deletionReason,
+          },
         },
+      });
 
-        newValues: {
-          deletedAt: deletedAt.toISOString(),
-          deletedBy,
-          deletionReason,
-        },
-      },
-    });
-
-    return deletedDocument;
-  });
+      return deletedDocument;
+    },
+  );
 
   return result;
 };

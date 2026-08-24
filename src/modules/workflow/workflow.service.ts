@@ -10,49 +10,24 @@ import type {
 } from "./workflow.validation";
 
 // ============================================================
+// CONSTANT
+// ============================================================
+
+const RECORDS_ARCHIVE_NAME =
+  "Records & Archive Directorate";
+
+// ============================================================
 // ASSIGN CASE
 // ============================================================
 //
-// ASSIGN means normal forward assignment:
+// Normal forward assignment:
 //
 // Records & Archive → Sector
 // Sector             → Directorate
 // Directorate        → Group
 //
-// ASSIGN does NOT allow:
-//
-// Directorate → Directorate  ❌ TRANSFER
-// Directorate → Sector       ❌ RETURN
-// Group → Directorate        ❌ RETURN
-// Group → Group              ❌
-// Sector → Records & Archive ❌
-//
-// IMPORTANT REASSIGN RULE:
-//
-// If:
-//
-// D → G1       ASSIGN
-// G1 → D       RETURN
-//
-// Then:
-//
-// D → G1       ❌ ASSIGN
-// D → G1       ✅ REASSIGN
-//
-// But:
-//
-// D → G1       ASSIGN
-// G1 → D       RETURN
-//
-// D → G2       ✅ ASSIGN
-//
-// The same rule applies to:
-//
-// S → D1       ASSIGN
-// D1 → S       RETURN
-// S → D1       ❌ ASSIGN
-// S → D1       ✅ REASSIGN
-// S → D2       ✅ ASSIGN
+// If a case was previously returned from the destination,
+// ASSIGN is rejected and REASSIGN must be used.
 //
 // ============================================================
 
@@ -62,9 +37,9 @@ export async function assignCase(
   input: AssignCaseInput,
 ) {
   return prisma.$transaction(async (tx) => {
-    // ============================================================
-    // 1. Find the case
-    // ============================================================
+    // ========================================================
+    // 1. FIND CASE
+    // ========================================================
 
     const caseRecord = await tx.case.findUnique({
       where: {
@@ -76,9 +51,9 @@ export async function assignCase(
       throw new Error("Case not found.");
     }
 
-    // ============================================================
-    // 2. Find destination organizational unit
-    // ============================================================
+    // ========================================================
+    // 2. FIND DESTINATION
+    // ========================================================
 
     const toUnit = await tx.organizationalUnit.findUnique({
       where: {
@@ -98,9 +73,9 @@ export async function assignCase(
       );
     }
 
-    // ============================================================
-    // 3. Find current organizational unit
-    // ============================================================
+    // ========================================================
+    // 3. FIND CURRENT UNIT
+    // ========================================================
 
     if (!caseRecord.currentUnitId) {
       throw new Error(
@@ -121,9 +96,9 @@ export async function assignCase(
       );
     }
 
-    // ============================================================
-    // 4. Validate normal forward assignment route
-    // ============================================================
+    // ========================================================
+    // 4. VALIDATE FORWARD ROUTE
+    // ========================================================
 
     const validRoute = isValidForwardRoute(
       fromUnit.unitType,
@@ -137,9 +112,9 @@ export async function assignCase(
       );
     }
 
-    // ============================================================
-    // 5. Find user performing the assignment
-    // ============================================================
+    // ========================================================
+    // 5. FIND USER
+    // ========================================================
 
     const user = await tx.user.findUnique({
       where: {
@@ -155,9 +130,9 @@ export async function assignCase(
       throw new Error("Assigning user is inactive.");
     }
 
-    // ============================================================
-    // 6. User must belong to current unit
-    // ============================================================
+    // ========================================================
+    // 6. USER MUST OWN CASE
+    // ========================================================
 
     if (caseRecord.currentUnitId !== user.unitId) {
       throw new Error(
@@ -165,9 +140,9 @@ export async function assignCase(
       );
     }
 
-    // ============================================================
-    // 7. Cannot assign to the same unit
-    // ============================================================
+    // ========================================================
+    // 7. CANNOT ASSIGN TO SAME UNIT
+    // ========================================================
 
     if (caseRecord.currentUnitId === toUnit.unitId) {
       throw new Error(
@@ -175,30 +150,9 @@ export async function assignCase(
       );
     }
 
-    // ============================================================
-    // 8. CHECK FOR REASSIGNMENT
-    // ============================================================
-    //
-    // We check the MOST RECENT workflow assignment.
-    //
-    // Example:
-    //
-    // D → G1
-    // G1 → D
-    //
-    // The latest assignment is:
-    //
-    // fromUnitId = G1
-    // toUnitId   = D
-    //
-    // Current case location = D
-    //
-    // If requested destination = G1,
-    // then this is REASSIGN.
-    //
-    // Therefore ASSIGN must reject it.
-    //
-    // ============================================================
+    // ========================================================
+    // 8. CHECK WHETHER REASSIGNMENT IS REQUIRED
+    // ========================================================
 
     const requiresReassignment =
       await wasReturnedFromDestination(
@@ -215,15 +169,9 @@ export async function assignCase(
       );
     }
 
-    // ============================================================
-    // 9. Remember current unit
-    // ============================================================
-
-    const fromUnitId = caseRecord.currentUnitId;
-
-    // ============================================================
-    // 10. Complete current active assignment
-    // ============================================================
+    // ========================================================
+    // 9. COMPLETE CURRENT ASSIGNMENT
+    // ========================================================
 
     await tx.workflowAssignment.updateMany({
       where: {
@@ -236,15 +184,15 @@ export async function assignCase(
       },
     });
 
-    // ============================================================
-    // 11. Create new workflow assignment
-    // ============================================================
+    // ========================================================
+    // 10. CREATE ASSIGNMENT
+    // ========================================================
 
     const assignment =
       await tx.workflowAssignment.create({
         data: {
           caseId,
-          fromUnitId,
+          fromUnitId: caseRecord.currentUnitId,
           toUnitId: toUnit.unitId,
           assignedBy: userId,
           assignmentStatus: "ACTIVE",
@@ -256,10 +204,10 @@ export async function assignCase(
         },
       });
 
-    // ============================================================
-    // 12. Update case location and status
-    // ============================================================
-    console.log("VERSION BEFORE RETURN:", caseRecord.version);
+    // ========================================================
+    // 11. UPDATE CASE
+    // ========================================================
+
     const updatedCase = await tx.case.update({
       where: {
         caseId,
@@ -276,11 +224,10 @@ export async function assignCase(
         currentUnit: true,
       },
     });
-    console.log("VERSION AFTER RETURN:", updatedCase.version);
 
-    // ============================================================
-    // 13. Record status history
-    // ============================================================
+    // ========================================================
+    // 12. STATUS HISTORY
+    // ========================================================
 
     await tx.statusHistory.create({
       data: {
@@ -290,9 +237,9 @@ export async function assignCase(
       },
     });
 
-    // ============================================================
-    // 14. Record audit log
-    // ============================================================
+    // ========================================================
+    // 13. AUDIT LOG
+    // ========================================================
 
     await tx.auditLog.create({
       data: {
@@ -303,7 +250,7 @@ export async function assignCase(
         entityId: caseId,
 
         oldValues: {
-          currentUnitId: fromUnitId,
+          currentUnitId: caseRecord.currentUnitId,
           status: caseRecord.status,
         },
 
@@ -315,10 +262,6 @@ export async function assignCase(
       },
     });
 
-    // ============================================================
-    // 15. Return result
-    // ============================================================
-
     return {
       case: updatedCase,
       assignment,
@@ -326,17 +269,8 @@ export async function assignCase(
   });
 }
 
-
 // ============================================================
 // VALID FORWARD ASSIGNMENT ROUTES
-// ============================================================
-//
-// ASSIGN:
-//
-// Records & Archive → Sector
-// Sector             → Directorate
-// Directorate        → Group
-//
 // ============================================================
 
 function isValidForwardRoute(
@@ -348,21 +282,15 @@ function isValidForwardRoute(
     return false;
   }
 
-  // ------------------------------------------------------------
   // Records & Archive → Sector
-  // ------------------------------------------------------------
-
   if (
-    fromUnitName === "Records & Archive Directorate" &&
+    fromUnitName === RECORDS_ARCHIVE_NAME &&
     toUnitType === "SECTOR"
   ) {
     return true;
   }
 
-  // ------------------------------------------------------------
   // Sector → Directorate
-  // ------------------------------------------------------------
-
   if (
     fromUnitType === "SECTOR" &&
     toUnitType === "DIRECTORATE"
@@ -370,10 +298,7 @@ function isValidForwardRoute(
     return true;
   }
 
-  // ------------------------------------------------------------
   // Directorate → Group
-  // ------------------------------------------------------------
-
   if (
     fromUnitType === "DIRECTORATE" &&
     toUnitType === "GROUP"
@@ -384,69 +309,16 @@ function isValidForwardRoute(
   return false;
 }
 
-
 // ============================================================
-// CHECK WHETHER ASSIGNMENT REQUIRES REASSIGN
-// ============================================================
-//
-// We look at the MOST RECENT workflow assignment.
-//
-// Example:
-//
-// D → G1       COMPLETED
-// G1 → D       ACTIVE
-//
-// Current:
-//
-// D
-//
-// Requested:
-//
-// D → G1
-//
-// Therefore:
-//
-// ❌ ASSIGN
-// ✅ REASSIGN
-//
-// ------------------------------------------------------------
-//
-// But:
-//
-// D → G1       COMPLETED
-// G1 → D       ACTIVE
-//
-// Requested:
-//
-// D → G2
-//
-// Therefore:
-//
-// ✅ ASSIGN
-//
+// CHECK WHETHER ASSIGNMENT REQUIRES REASSIGNMENT
 // ============================================================
 
 async function wasReturnedFromDestination(
-  tx:  Prisma.TransactionClient,
+  tx: Prisma.TransactionClient,
   caseId: string,
   currentUnitId: string,
   destinationUnitId: string,
 ): Promise<boolean> {
-  // IMPORTANT:
-  //
-  // We intentionally DO NOT filter by assignmentStatus.
-  //
-  // Why?
-  //
-  // The return assignment is ACTIVE because the case is
-  // currently sitting at the unit it was returned to.
-  //
-  // Example:
-  //
-  // G1 → D
-  //
-  // This is the latest assignment and it is ACTIVE.
-
   const latestAssignment =
     await tx.workflowAssignment.findFirst({
       where: {
@@ -457,32 +329,9 @@ async function wasReturnedFromDestination(
       },
     });
 
-  // No workflow history.
-  //
-  // This means this is a normal first assignment.
-
   if (!latestAssignment) {
     return false;
   }
-
-  // ============================================================
-  // Detect:
-  //
-  // destination → current
-  //
-  // Example:
-  //
-  // G1 → D
-  //
-  // Current = D
-  // Destination = G1
-  //
-  // Therefore:
-  //
-  // G1 → D matches
-  //
-  // This means the destination just returned the case.
-  // ============================================================
 
   return (
     latestAssignment.fromUnitId === destinationUnitId &&
@@ -494,23 +343,15 @@ async function wasReturnedFromDestination(
 // RETURN CASE
 // ============================================================
 //
-// RETURN means moving work backward:
+// Normal:
 //
-// Group        → Directorate
-// Directorate  → Sector
+// Group       → Directorate
+// Directorate → Sector
 //
-// RETURN does NOT allow:
+// NEW:
 //
-// Group → Sector
-// Group → Records & Archive
-// Directorate → Directorate
-// Directorate → Records & Archive
-// Sector → Records & Archive
+// Sector      → Records & Archive
 //
-// ============================================================
-
-// ============================================================
-// RETURN CASE
 // ============================================================
 
 export async function returnCase(
@@ -561,7 +402,7 @@ export async function returnCase(
     }
 
     // ========================================================
-    // 3. CASE MUST CURRENTLY BELONG TO USER'S UNIT
+    // 3. USER MUST OWN CASE
     // ========================================================
 
     if (caseRecord.currentUnitId !== user.unit.unitId) {
@@ -571,89 +412,116 @@ export async function returnCase(
     }
 
     // ========================================================
-    // 4. CURRENT UNIT MUST BE ELIGIBLE TO RETURN
-    //
-    // Only:
-    //
-    // GROUP        → DIRECTORATE
-    // DIRECTORATE  → SECTOR
-    //
-    // Sector cannot return.
-    // Records & Archive cannot return.
+    // 4. DETERMINE RETURN DESTINATION
     // ========================================================
 
-    if (
-      user.unit.unitType !== "GROUP" &&
-      user.unit.unitType !== "DIRECTORATE"
+    let destinationUnit;
+
+    // --------------------------------------------------------
+    // NEW RULE:
+    //
+    // Sector → Records & Archive
+    // --------------------------------------------------------
+
+    if (user.unit.unitType === "SECTOR") {
+      destinationUnit =
+        await tx.organizationalUnit.findFirst({
+          where: {
+            name: RECORDS_ARCHIVE_NAME,
+            unitType: "DIRECTORATE",
+          },
+        });
+
+      if (!destinationUnit) {
+        throw new Error(
+          "Records & Archive organizational unit not found.",
+        );
+      }
+
+      if (!destinationUnit.isActive) {
+        throw new Error(
+          "Records & Archive organizational unit is inactive.",
+        );
+      }
+
+      if (caseRecord.currentUnitId === destinationUnit.unitId) {
+        throw new Error(
+          "Case is already assigned to Records & Archive.",
+        );
+      }
+    }
+
+    // --------------------------------------------------------
+    // EXISTING RULE:
+    //
+    // Group → parent Directorate
+    // Directorate → parent Sector
+    // --------------------------------------------------------
+
+    else if (
+      user.unit.unitType === "GROUP" ||
+      user.unit.unitType === "DIRECTORATE"
     ) {
+      if (!user.unit.parentUnitId) {
+        throw new Error(
+          "This organizational unit has no parent unit and cannot return the case.",
+        );
+      }
+
+      destinationUnit =
+        await tx.organizationalUnit.findUnique({
+          where: {
+            unitId: user.unit.parentUnitId,
+          },
+        });
+
+      if (!destinationUnit) {
+        throw new Error(
+          "Parent organizational unit not found.",
+        );
+      }
+
+      if (!destinationUnit.isActive) {
+        throw new Error(
+          "Parent organizational unit is inactive.",
+        );
+      }
+
+      if (caseRecord.currentUnitId === destinationUnit.unitId) {
+        throw new Error(
+          "Case is already assigned to the parent organizational unit.",
+        );
+      }
+    }
+
+    // --------------------------------------------------------
+    // Everything else cannot return
+    // --------------------------------------------------------
+
+    else {
       throw new Error(
-        "Only Group and Directorate users can return cases.",
+        "Only Group, Directorate, and Sector users can return cases.",
       );
     }
 
     // ========================================================
-    // 5. FIND PARENT UNIT
-    //
-    // Return destination is determined by the organizational
-    // hierarchy, NOT by the previous workflow assignment.
-    // ========================================================
-
-    if (!user.unit.parentUnitId) {
-      throw new Error(
-        "This organizational unit has no parent unit and cannot return the case.",
-      );
-    }
-
-    const parentUnit = await tx.organizationalUnit.findUnique({
-      where: {
-        unitId: user.unit.parentUnitId,
-      },
-    });
-
-    if (!parentUnit) {
-      throw new Error(
-        "Parent organizational unit not found.",
-      );
-    }
-
-    if (!parentUnit.isActive) {
-      throw new Error(
-        "Parent organizational unit is inactive.",
-      );
-    }
-
-    // ========================================================
-    // 6. VALIDATE THE HIERARCHICAL RETURN ROUTE
-    //
-    // GROUP → DIRECTORATE
-    // DIRECTORATE → SECTOR
-    //
-    // Nothing else is allowed.
+    // 5. VALIDATE RETURN ROUTE
     // ========================================================
 
     const validReturn = isValidReturnRoute(
       user.unit.unitType,
-      parentUnit.unitType,
+      destinationUnit.unitType,
+      destinationUnit.name,
     );
 
     if (!validReturn) {
       throw new Error(
-        `Invalid return route: ${user.unit.name} → ${parentUnit.name}`,
+        `Invalid return route: ${user.unit.name} → ${destinationUnit.name}`,
       );
     }
 
     // ========================================================
-    // 7. MAKE SURE CASE IS NOT ALREADY AT PARENT
-    // ========================================================
-
-    if (caseRecord.currentUnitId === parentUnit.unitId) {
-      throw new Error(
-        "Case is already assigned to the parent organizational unit.",
-      );
-    }
-
-    // ========================================================
-    // 8. COMPLETE CURRENT ACTIVE ASSIGNMENT
+    // 6. COMPLETE CURRENT ACTIVE ASSIGNMENT
     // ========================================================
 
     await tx.workflowAssignment.updateMany({
@@ -668,7 +536,7 @@ export async function returnCase(
     });
 
     // ========================================================
-    // 9. CREATE RETURN WORKFLOW ASSIGNMENT
+    // 7. CREATE RETURN ASSIGNMENT
     // ========================================================
 
     const assignment =
@@ -676,7 +544,7 @@ export async function returnCase(
         data: {
           caseId,
           fromUnitId: user.unit.unitId,
-          toUnitId: parentUnit.unitId,
+          toUnitId: destinationUnit.unitId,
           assignedBy: userId,
           assignmentStatus: "ACTIVE",
           remarks: input.remarks,
@@ -688,7 +556,7 @@ export async function returnCase(
       });
 
     // ========================================================
-    // 10. UPDATE CASE LOCATION
+    // 8. UPDATE CASE
     // ========================================================
 
     const updatedCase = await tx.case.update({
@@ -696,7 +564,7 @@ export async function returnCase(
         caseId,
       },
       data: {
-        currentUnitId: parentUnit.unitId,
+        currentUnitId: destinationUnit.unitId,
         status: "SENT_BACK_FOR_CORRECTION",
         version: {
           increment: 1,
@@ -709,7 +577,7 @@ export async function returnCase(
     });
 
     // ========================================================
-    // 11. STATUS HISTORY
+    // 9. STATUS HISTORY
     // ========================================================
 
     await tx.statusHistory.create({
@@ -721,7 +589,7 @@ export async function returnCase(
     });
 
     // ========================================================
-    // 12. AUDIT LOG
+    // 10. AUDIT LOG
     // ========================================================
 
     await tx.auditLog.create({
@@ -738,7 +606,7 @@ export async function returnCase(
         },
 
         newValues: {
-          currentUnitId: parentUnit.unitId,
+          currentUnitId: destinationUnit.unitId,
           status: "SENT_BACK_FOR_CORRECTION",
           assignmentId: assignment.assignmentId,
           remarks: input.remarks,
@@ -746,19 +614,14 @@ export async function returnCase(
       },
     });
 
-    // ========================================================
-    // 13. RETURN RESULT
-    // ========================================================
-
     return {
       case: updatedCase,
       assignment,
       returnedFrom: user.unit,
-      returnedTo: parentUnit,
+      returnedTo: destinationUnit,
     };
   });
 }
-
 
 // ============================================================
 // VALID RETURN ROUTES
@@ -767,8 +630,25 @@ export async function returnCase(
 function isValidReturnRoute(
   fromUnitType: string,
   toUnitType: string,
+  toUnitName: string,
 ): boolean {
   // ==========================================================
+  // NEW:
+  //
+  // SECTOR → RECORDS & ARCHIVE
+  // ==========================================================
+
+  if (
+    fromUnitType === "SECTOR" &&
+    toUnitType === "DIRECTORATE" &&
+    toUnitName === RECORDS_ARCHIVE_NAME
+  ) {
+    return true;
+  }
+
+  // ==========================================================
+  // EXISTING:
+  //
   // GROUP → DIRECTORATE
   // ==========================================================
 
@@ -780,6 +660,8 @@ function isValidReturnRoute(
   }
 
   // ==========================================================
+  // EXISTING:
+  //
   // DIRECTORATE → SECTOR
   // ==========================================================
 
@@ -790,47 +672,36 @@ function isValidReturnRoute(
     return true;
   }
 
-  // ==========================================================
-  // EVERYTHING ELSE IS INVALID
-  // ==========================================================
-
   return false;
 }
 
-
-
 // ============================================================
-// MAKE CASE DECISION
+// REASSIGN CASE
 // ============================================================
 //
-// FINAL DECISION
+// Existing:
 //
-// Only a SECTOR can make the final decision.
+// Directorate → Group
+// Sector      → Directorate
 //
-// Decision:
-//   APPROVED
-//   REJECTED
+// NEW:
 //
-// Case status becomes:
-//   APPROVED
-//   REJECTED
+// Records & Archive → Sector
 //
-// Workflow statuses such as:
-//   UNDER_REVIEW
-//   IN_PROGRESS
-//   PENDING_CLARIFICATION
-//   SENT_BACK_FOR_CORRECTION
+// Example:
 //
-// are NOT final decisions.
+// R&A → Sector 1       ASSIGN
+// Sector 1 → R&A       RETURN
+// R&A → Sector 1       REASSIGN
 //
 // ============================================================
 
-export async function makeCaseDecision(
+export async function reassignCase(
   caseId: string,
   userId: string,
-  input: CaseDecisionInput,
+  input: ReassignCaseInput,
 ) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  return prisma.$transaction(async (tx) => {
     // ========================================================
     // 1. FIND CASE
     // ========================================================
@@ -845,8 +716,14 @@ export async function makeCaseDecision(
       throw new Error("Case not found.");
     }
 
+    if (!caseRecord.currentUnitId) {
+      throw new Error(
+        "Case has no current organizational unit.",
+      );
+    }
+
     // ========================================================
-    // 2. FIND DECISION-MAKING USER
+    // 2. FIND USER
     // ========================================================
 
     const user = await tx.user.findUnique({
@@ -859,114 +736,204 @@ export async function makeCaseDecision(
     });
 
     if (!user) {
-      throw new Error(
-        "Decision-making user not found.",
-      );
+      throw new Error("Reassigning user not found.");
     }
 
     if (!user.isActive) {
-      throw new Error(
-        "Decision-making user is inactive.",
-      );
+      throw new Error("Reassigning user is inactive.");
     }
-
-    // ========================================================
-    // 3. USER MUST BELONG TO AN ORGANIZATIONAL UNIT
-    // ========================================================
 
     if (!user.unit) {
       throw new Error(
-        "Decision-making user is not assigned to an organizational unit.",
+        "Reassigning user is not assigned to an organizational unit.",
       );
     }
 
     // ========================================================
-    // 4. ONLY SECTOR CAN MAKE FINAL DECISION
-    // ========================================================
-
-    if (user.unit.unitType !== "SECTOR") {
-      throw new Error(
-        "Only Sector users can approve or reject cases.",
-      );
-    }
-
-    // ========================================================
-    // 5. CASE MUST CURRENTLY BELONG TO USER'S SECTOR
+    // 3. USER MUST OWN CASE
     // ========================================================
 
     if (caseRecord.currentUnitId !== user.unit.unitId) {
       throw new Error(
-        "You can only make a decision on cases currently held by your organizational unit.",
+        "You can only reassign cases currently held by your organizational unit.",
+      );
+    }
+
+    const currentUnit = user.unit;
+
+    // ========================================================
+    // 4. FIND DESTINATION
+    // ========================================================
+
+    const toUnit = await tx.organizationalUnit.findUnique({
+      where: {
+        unitId: input.toUnitId,
+      },
+    });
+
+    if (!toUnit) {
+      throw new Error(
+        "Destination organizational unit not found.",
+      );
+    }
+
+    if (!toUnit.isActive) {
+      throw new Error(
+        "Destination organizational unit is inactive.",
       );
     }
 
     // ========================================================
-    // 6. MAKE SURE CASE DOES NOT ALREADY HAVE A FINAL
-    //    DECISION
+    // 5. DESTINATION MUST DIFFER
     // ========================================================
 
-    const existingDecision =
-      await tx.decision.findFirst({
+    if (toUnit.unitId === currentUnit.unitId) {
+      throw new Error(
+        "Case is already held by this organizational unit.",
+      );
+    }
+
+    // ========================================================
+    // 6. FIND MOST RECENT INCOMING ASSIGNMENT
+    //
+    // Example:
+    //
+    // R&A → Sector 1
+    // Sector 1 → R&A
+    //
+    // latestIncomingAssignment:
+    //
+    // from = Sector 1
+    // to   = R&A
+    //
+    // ========================================================
+
+    const latestIncomingAssignment =
+      await tx.workflowAssignment.findFirst({
         where: {
           caseId,
+          toUnitId: currentUnit.unitId,
         },
         orderBy: {
-          decidedAt: "desc",
+          assignedAt: "desc",
         },
       });
 
-    if (existingDecision) {
+    if (!latestIncomingAssignment) {
       throw new Error(
-        "A final decision has already been made for this case.",
+        "No previous workflow history found for this case.",
+      );
+    }
+
+    const returnedFromUnitId =
+      latestIncomingAssignment.fromUnitId;
+
+    if (!returnedFromUnitId) {
+      throw new Error(
+        "Case cannot be reassigned because no previous unit was found.",
       );
     }
 
     // ========================================================
-    // 7. MAKE SURE CASE IS NOT ALREADY FINALIZED
+    // 7. VERIFY PREVIOUS FORWARD ASSIGNMENT
+    //
+    // Example:
+    //
+    // R&A → Sector 1
+    // Sector 1 → R&A
+    //
+    // Therefore:
+    //
+    // previousAssignment:
+    //
+    // from = R&A
+    // to   = Sector 1
+    //
     // ========================================================
 
-    if (
-      caseRecord.status === "APPROVED" ||
-      caseRecord.status === "REJECTED"
-    ) {
-      throw new Error(
-        "Case is already finalized.",
-      );
-    }
-
-    // ========================================================
-    // 8. DETERMINE NEW CASE STATUS
-    // ========================================================
-
-    const newStatus =
-      input.decisionType === "APPROVED"
-        ? "APPROVED"
-        : "REJECTED";
-
-    // ========================================================
-    // 9. CREATE DECISION RECORD
-    // ========================================================
-
-    const decision = await tx.decision.create({
-      data: {
-        caseId,
-        decidedBy: userId,
-        decisionType: input.decisionType,
-        decisionText: input.decisionText,
-      },
-      include: {
-        decider: {
-          select: {
-            userId: true,
-            name: true,
-            email: true,
-          },
+    const previousAssignment =
+      await tx.workflowAssignment.findFirst({
+        where: {
+          caseId,
+          fromUnitId: currentUnit.unitId,
+          toUnitId: returnedFromUnitId,
         },
+        orderBy: {
+          assignedAt: "desc",
+        },
+      });
+
+    if (!previousAssignment) {
+      throw new Error(
+        "Case cannot be reassigned because it was not previously assigned to the destination unit.",
+      );
+    }
+
+    // ========================================================
+    // 8. DESTINATION MUST BE SAME UNIT THAT RETURNED CASE
+    // ========================================================
+
+    if (toUnit.unitId !== returnedFromUnitId) {
+      throw new Error(
+        "Invalid reassignment destination. A case can only be reassigned to the same organizational unit that previously returned it.",
+      );
+    }
+
+    // ========================================================
+    // 9. VALIDATE REASSIGN ROUTE
+    // ========================================================
+
+    const validReassignRoute =
+      isValidReassignRoute(
+        currentUnit.unitType,
+        toUnit.unitType,
+        currentUnit.name,
+        toUnit.name,
+      );
+
+    if (!validReassignRoute) {
+      throw new Error(
+        `Invalid reassignment route: ${currentUnit.name} → ${toUnit.name}`,
+      );
+    }
+
+    // ========================================================
+    // 10. COMPLETE CURRENT ASSIGNMENT
+    // ========================================================
+
+    await tx.workflowAssignment.updateMany({
+      where: {
+        caseId,
+        assignmentStatus: "ACTIVE",
+      },
+      data: {
+        assignmentStatus: "COMPLETED",
+        completedAt: new Date(),
       },
     });
 
     // ========================================================
-    // 10. UPDATE CASE STATUS
+    // 11. CREATE REASSIGNMENT
+    // ========================================================
+
+    const assignment =
+      await tx.workflowAssignment.create({
+        data: {
+          caseId,
+          fromUnitId: currentUnit.unitId,
+          toUnitId: toUnit.unitId,
+          assignedBy: userId,
+          assignmentStatus: "ACTIVE",
+          remarks: input.remarks,
+        },
+        include: {
+          fromUnit: true,
+          toUnit: true,
+        },
+      });
+
+    // ========================================================
+    // 12. UPDATE CASE
     // ========================================================
 
     const updatedCase = await tx.case.update({
@@ -974,7 +941,8 @@ export async function makeCaseDecision(
         caseId,
       },
       data: {
-        status: newStatus,
+        currentUnitId: toUnit.unitId,
+        status: "UNDER_REVIEW",
         version: {
           increment: 1,
         },
@@ -986,77 +954,326 @@ export async function makeCaseDecision(
     });
 
     // ========================================================
-    // 11. STATUS HISTORY
+    // 13. STATUS HISTORY
     // ========================================================
 
     await tx.statusHistory.create({
       data: {
         caseId,
         changedBy: userId,
-        status: newStatus,
+        status: "UNDER_REVIEW",
       },
     });
 
     // ========================================================
-    // 12. AUDIT LOG
+    // 14. AUDIT LOG
     // ========================================================
 
     await tx.auditLog.create({
       data: {
         userId,
         caseId,
-        action:
-          input.decisionType === "APPROVED"
-            ? "CASE_APPROVED"
-            : "CASE_REJECTED",
+        action: "CASE_REASSIGNED",
         entityType: "CASE",
         entityId: caseId,
 
         oldValues: {
+          currentUnitId: currentUnit.unitId,
           status: caseRecord.status,
-          currentUnitId: caseRecord.currentUnitId,
         },
 
         newValues: {
-          status: newStatus,
-          currentUnitId: caseRecord.currentUnitId,
-          decisionId: decision.decisionId,
-          decisionType: input.decisionType,
-          decisionText: input.decisionText ?? null,
+          currentUnitId: toUnit.unitId,
+          status: "UNDER_REVIEW",
+          assignmentId: assignment.assignmentId,
+          remarks: input.remarks,
         },
       },
     });
 
-    // ========================================================
-    // 13. RETURN RESULT
-    // ========================================================
-
     return {
       case: updatedCase,
-      decision,
+      assignment,
+      reassignedFrom: currentUnit,
+      reassignedTo: toUnit,
     };
   });
 }
 
+// ============================================================
+// VALID REASSIGN ROUTES
+// ============================================================
+
+function isValidReassignRoute(
+  fromUnitType: string,
+  toUnitType: string,
+  fromUnitName: string,
+  toUnitName: string,
+): boolean {
+  // ==========================================================
+  // NEW:
+  //
+  // Records & Archive → Sector
+  //
+  // R&A → S
+  //
+  // ==========================================================
+
+  if (
+    fromUnitType === "DIRECTORATE" &&
+    fromUnitName === RECORDS_ARCHIVE_NAME &&
+    toUnitType === "SECTOR"
+  ) {
+    return true;
+  }
+
+  // ==========================================================
+  // EXISTING:
+  //
+  // Directorate → Group
+  // ==========================================================
+
+  if (
+    fromUnitType === "DIRECTORATE" &&
+    toUnitType === "GROUP"
+  ) {
+    return true;
+  }
+
+  // ==========================================================
+  // EXISTING:
+  //
+  // Sector → Directorate
+  // ==========================================================
+
+  if (
+    fromUnitType === "SECTOR" &&
+    toUnitType === "DIRECTORATE"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// MAKE CASE DECISION
+// ============================================================
+
+export async function makeCaseDecision(
+  caseId: string,
+  userId: string,
+  input: CaseDecisionInput,
+) {
+  return prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      // ======================================================
+      // 1. FIND CASE
+      // ======================================================
+
+      const caseRecord = await tx.case.findUnique({
+        where: {
+          caseId,
+        },
+      });
+
+      if (!caseRecord) {
+        throw new Error("Case not found.");
+      }
+
+      // ======================================================
+      // 2. FIND USER
+      // ======================================================
+
+      const user = await tx.user.findUnique({
+        where: {
+          userId,
+        },
+        include: {
+          unit: true,
+        },
+      });
+
+      if (!user) {
+        throw new Error(
+          "Decision-making user not found.",
+        );
+      }
+
+      if (!user.isActive) {
+        throw new Error(
+          "Decision-making user is inactive.",
+        );
+      }
+
+      if (!user.unit) {
+        throw new Error(
+          "Decision-making user is not assigned to an organizational unit.",
+        );
+      }
+
+      // ======================================================
+      // 3. ONLY SECTOR
+      // ======================================================
+
+      if (user.unit.unitType !== "SECTOR") {
+        throw new Error(
+          "Only Sector users can approve or reject cases.",
+        );
+      }
+
+      // ======================================================
+      // 4. CASE MUST BE IN USER'S SECTOR
+      // ======================================================
+
+      if (caseRecord.currentUnitId !== user.unit.unitId) {
+        throw new Error(
+          "You can only make a decision on cases currently held by your organizational unit.",
+        );
+      }
+
+      // ======================================================
+      // 5. CHECK EXISTING DECISION
+      // ======================================================
+
+      const existingDecision =
+        await tx.decision.findFirst({
+          where: {
+            caseId,
+          },
+          orderBy: {
+            decidedAt: "desc",
+          },
+        });
+
+      if (existingDecision) {
+        throw new Error(
+          "A final decision has already been made for this case.",
+        );
+      }
+
+      // ======================================================
+      // 6. CHECK FINAL STATUS
+      // ======================================================
+
+      if (
+        caseRecord.status === "APPROVED" ||
+        caseRecord.status === "REJECTED"
+      ) {
+        throw new Error(
+          "Case is already finalized.",
+        );
+      }
+
+      // ======================================================
+      // 7. DETERMINE STATUS
+      // ======================================================
+
+      const newStatus =
+        input.decisionType === "APPROVED"
+          ? "APPROVED"
+          : "REJECTED";
+
+      // ======================================================
+      // 8. CREATE DECISION
+      // ======================================================
+
+      const decision = await tx.decision.create({
+        data: {
+          caseId,
+          decidedBy: userId,
+          decisionType: input.decisionType,
+          decisionText: input.decisionText,
+        },
+        include: {
+          decider: {
+            select: {
+              userId: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      // ======================================================
+      // 9. UPDATE CASE
+      // ======================================================
+
+      const updatedCase = await tx.case.update({
+        where: {
+          caseId,
+        },
+        data: {
+          status: newStatus,
+          version: {
+            increment: 1,
+          },
+        },
+        include: {
+          customer: true,
+          currentUnit: true,
+        },
+      });
+
+      // ======================================================
+      // 10. STATUS HISTORY
+      // ======================================================
+
+      await tx.statusHistory.create({
+        data: {
+          caseId,
+          changedBy: userId,
+          status: newStatus,
+        },
+      });
+
+      // ======================================================
+      // 11. AUDIT LOG
+      // ======================================================
+
+      await tx.auditLog.create({
+        data: {
+          userId,
+          caseId,
+          action:
+            input.decisionType === "APPROVED"
+              ? "CASE_APPROVED"
+              : "CASE_REJECTED",
+          entityType: "CASE",
+          entityId: caseId,
+
+          oldValues: {
+            status: caseRecord.status,
+            currentUnitId: caseRecord.currentUnitId,
+          },
+
+          newValues: {
+            status: newStatus,
+            currentUnitId: caseRecord.currentUnitId,
+            decisionId: decision.decisionId,
+            decisionType: input.decisionType,
+            decisionText:
+              input.decisionText ?? null,
+          },
+        },
+      });
+
+      return {
+        case: updatedCase,
+        decision,
+      };
+    },
+  );
+}
 
 // ============================================================
 // TRANSFER CASE
 // ============================================================
 //
-// Business rule:
+// Directorate → Directorate
 //
-// Directorate → another Directorate
-//
-// Transfer is different from:
-//   ASSIGN  = forward work downward
-//   RETURN  = send work backward
-//   TRANSFER = move work directly between Directorates
-//
-// Allowed:
-//
-// Directorate A → Directorate B
-//
-// Only if both Directorates belong to the SAME Sector.
+// Only within the same Sector.
 //
 // ============================================================
 
@@ -1114,7 +1331,7 @@ export async function transferCase(
     }
 
     // ========================================================
-    // 3. USER MUST CURRENTLY HOLD THE CASE
+    // 3. USER MUST OWN CASE
     // ========================================================
 
     if (caseRecord.currentUnitId !== user.unitId) {
@@ -1124,7 +1341,7 @@ export async function transferCase(
     }
 
     // ========================================================
-    // 4. CURRENT UNIT MUST BE A DIRECTORATE
+    // 4. CURRENT UNIT MUST BE DIRECTORATE
     // ========================================================
 
     if (user.unit.unitType !== "DIRECTORATE") {
@@ -1134,7 +1351,7 @@ export async function transferCase(
     }
 
     // ========================================================
-    // 5. FIND DESTINATION UNIT
+    // 5. DESTINATION
     // ========================================================
 
     const toUnit = await tx.organizationalUnit.findUnique({
@@ -1156,7 +1373,7 @@ export async function transferCase(
     }
 
     // ========================================================
-    // 6. DESTINATION MUST ALSO BE A DIRECTORATE
+    // 6. DESTINATION MUST BE DIRECTORATE
     // ========================================================
 
     if (toUnit.unitType !== "DIRECTORATE") {
@@ -1166,7 +1383,7 @@ export async function transferCase(
     }
 
     // ========================================================
-    // 7. CANNOT TRANSFER TO SAME DIRECTORATE
+    // 7. CANNOT SAME DIRECTORATE
     // ========================================================
 
     if (user.unit.unitId === toUnit.unitId) {
@@ -1176,7 +1393,7 @@ export async function transferCase(
     }
 
     // ========================================================
-    // 8. BOTH DIRECTORATES MUST BELONG TO SAME SECTOR
+    // 8. SAME SECTOR
     // ========================================================
 
     if (!user.unit.parentUnitId) {
@@ -1191,14 +1408,17 @@ export async function transferCase(
       );
     }
 
-    if (user.unit.parentUnitId !== toUnit.parentUnitId) {
+    if (
+      user.unit.parentUnitId !==
+      toUnit.parentUnitId
+    ) {
       throw new Error(
         "A case can only be transferred between Directorates within the same Sector.",
       );
     }
 
     // ========================================================
-    // 9. COMPLETE CURRENT ACTIVE ASSIGNMENT
+    // 9. COMPLETE CURRENT ASSIGNMENT
     // ========================================================
 
     await tx.workflowAssignment.updateMany({
@@ -1213,7 +1433,7 @@ export async function transferCase(
     });
 
     // ========================================================
-    // 10. CREATE TRANSFER ASSIGNMENT
+    // 10. CREATE TRANSFER
     // ========================================================
 
     const transferAssignment =
@@ -1233,7 +1453,7 @@ export async function transferCase(
       });
 
     // ========================================================
-    // 11. UPDATE CASE LOCATION
+    // 11. UPDATE CASE
     // ========================================================
 
     const updatedCase = await tx.case.update({
@@ -1287,14 +1507,11 @@ export async function transferCase(
           status: "UNDER_REVIEW",
           assignmentId:
             transferAssignment.assignmentId,
-          transferType: "DIRECTORATE_TO_DIRECTORATE",
+          transferType:
+            "DIRECTORATE_TO_DIRECTORATE",
         },
       },
     });
-
-    // ========================================================
-    // 14. RETURN RESULT
-    // ========================================================
 
     return {
       case: updatedCase,
@@ -1303,350 +1520,4 @@ export async function transferCase(
       transferredTo: toUnit,
     };
   });
-}
-
-
-// ============================================================
-// REASSIGN CASE
-// ============================================================
-
-export async function reassignCase(
-  caseId: string,
-  userId: string,
-  input: ReassignCaseInput,
-) {
-
-  return prisma.$transaction(async (tx) => {
-    // ========================================================
-    // 1. Find case
-    // ========================================================
-
-    const caseRecord = await tx.case.findUnique({
-      where: {
-        caseId,
-      },
-    });
-
-    if (!caseRecord) {
-      throw new Error("Case not found.");
-    }
-
-    if (!caseRecord.currentUnitId) {
-      throw new Error(
-        "Case has no current organizational unit.",
-      );
-    }
-
-    // ========================================================
-    // 2. Find user
-    // ========================================================
-
-    const user = await tx.user.findUnique({
-      where: {
-        userId,
-      },
-      include: {
-        unit: true,
-      },
-    });
-
-    if (!user) {
-      throw new Error("Reassigning user not found.");
-    }
-
-    if (!user.isActive) {
-      throw new Error("Reassigning user is inactive.");
-    }
-
-    if (!user.unit) {
-      throw new Error(
-        "Reassigning user is not assigned to an organizational unit.",
-      );
-    }
-
-    // ========================================================
-    // 3. User must own the case
-    // ========================================================
-
-    if (caseRecord.currentUnitId !== user.unit.unitId) {
-      throw new Error(
-        "You can only reassign cases currently held by your organizational unit.",
-      );
-    }
-
-    const currentUnit = user.unit;
-
-    // ========================================================
-    // 4. Find destination unit
-    // ========================================================
-
-    const toUnit = await tx.organizationalUnit.findUnique({
-      where: {
-        unitId: input.toUnitId,
-      },
-    });
-
-    if (!toUnit) {
-      throw new Error(
-        "Destination organizational unit not found.",
-      );
-    }
-
-    if (!toUnit.isActive) {
-      throw new Error(
-        "Destination organizational unit is inactive.",
-      );
-    }
-
-    // ========================================================
-    // 5. Destination must be different from current unit
-    // ========================================================
-
-    if (toUnit.unitId === currentUnit.unitId) {
-      throw new Error(
-        "Case is already held by this organizational unit.",
-      );
-    }
-
-    // ========================================================
-    // 6. Find the return that brought the case BACK
-    //    to the current unit.
-    //
-    // Example:
-    //
-    // D → G1
-    // G1 → D   RETURN
-    //
-    // We need to find that G1 → D return.
-    // ========================================================
-
-    const latestIncomingAssignment =
-      await tx.workflowAssignment.findFirst({
-        where: {
-          caseId,
-          toUnitId: currentUnit.unitId,
-        },
-        orderBy: {
-          assignedAt: "desc",
-        },
-      });
-
-    if (!latestIncomingAssignment) {
-      throw new Error(
-        "No previous workflow history found for this case.",
-      );
-    }
-
-    // ========================================================
-    // 7. The latest incoming movement MUST be a RETURN
-    //
-    // We identify this by checking that the case came back
-    // from the unit that previously received it.
-    // ========================================================
-
-    const returnedFromUnitId =
-      latestIncomingAssignment.fromUnitId;
-
-    if (!returnedFromUnitId) {
-      throw new Error(
-        "Case cannot be reassigned because no previous unit was found.",
-      );
-    }
-
-    // ========================================================
-    // 8. Verify that the previous movement was:
-    //
-    // currentUnit → returnedFromUnit
-    //
-    // Example:
-    //
-    // D → G1
-    //
-    // and then:
-    //
-    // G1 → D
-    //
-    // Therefore G1 is the ONLY valid reassignment target.
-    // ========================================================
-
-    const previousAssignment =
-      await tx.workflowAssignment.findFirst({
-        where: {
-          caseId,
-          fromUnitId: currentUnit.unitId,
-          toUnitId: returnedFromUnitId,
-        },
-        orderBy: {
-          assignedAt: "desc",
-        },
-      });
-
-    if (!previousAssignment) {
-      throw new Error(
-        "Case cannot be reassigned because it was not previously assigned to the destination unit.",
-      );
-    }
-
-    // ========================================================
-    // 9. Destination MUST be the same unit that previously
-    //    received the case before returning it.
-    // ========================================================
-
-    if (toUnit.unitId !== returnedFromUnitId) {
-      throw new Error(
-        "Invalid reassignment destination. A case can only be reassigned to the same organizational unit that previously returned it.",
-      );
-    }
-
-    // ========================================================
-    // 10. Validate level-specific reassignment
-    // ========================================================
-
-    const validReassignRoute =
-      isValidReassignRoute(
-        currentUnit.unitType,
-        toUnit.unitType,
-      );
-
-    if (!validReassignRoute) {
-      throw new Error(
-        `Invalid reassignment route: ${currentUnit.name} → ${toUnit.name}`,
-      );
-    }
-
-    // ========================================================
-    // 11. Complete current active assignment
-    // ========================================================
-
-    await tx.workflowAssignment.updateMany({
-      where: {
-        caseId,
-        assignmentStatus: "ACTIVE",
-      },
-      data: {
-        assignmentStatus: "COMPLETED",
-        completedAt: new Date(),
-      },
-    });
-
-    // ========================================================
-    // 12. Create reassignment
-    // ========================================================
-
-    const assignment =
-      await tx.workflowAssignment.create({
-        data: {
-          caseId,
-          fromUnitId: currentUnit.unitId,
-          toUnitId: toUnit.unitId,
-          assignedBy: userId,
-          assignmentStatus: "ACTIVE",
-          remarks: input.remarks,
-        },
-        include: {
-          fromUnit: true,
-          toUnit: true,
-        },
-      });
-
-    // ========================================================
-    // 13. Update case
-    // ========================================================
-
-    const updatedCase = await tx.case.update({
-      where: {
-        caseId,
-      },
-      data: {
-        currentUnitId: toUnit.unitId,
-        status: "UNDER_REVIEW",
-        version: {
-          increment: 1,
-        },
-      },
-      include: {
-        customer: true,
-        currentUnit: true,
-      },
-    });
-
-    // ========================================================
-    // 14. Status history
-    // ========================================================
-
-    await tx.statusHistory.create({
-      data: {
-        caseId,
-        changedBy: userId,
-        status: "UNDER_REVIEW",
-      },
-    });
-
-    // ========================================================
-    // 15. Audit log
-    // ========================================================
-
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId,
-        action: "CASE_REASSIGNED",
-        entityType: "CASE",
-        entityId: caseId,
-        oldValues: {
-          currentUnitId: currentUnit.unitId,
-          status: caseRecord.status,
-        },
-        newValues: {
-          currentUnitId: toUnit.unitId,
-          status: "UNDER_REVIEW",
-          assignmentId: assignment.assignmentId,
-          remarks: input.remarks,
-        },
-      },
-    });
-
-    return {
-      case: updatedCase,
-      assignment,
-      reassignedFrom: currentUnit,
-      reassignedTo: toUnit,
-    };
-  });
-}
-
-
-// ============================================================
-// VALID REASSIGN ROUTES
-// ============================================================
-
-function isValidReassignRoute(
-  fromUnitType: string,
-  toUnitType: string,
-): boolean {
-  // Directorate → Group
-  //
-  // D → G1
-  // G1 → D
-  // D → G1 (REASSIGN)
-  if (
-    fromUnitType === "DIRECTORATE" &&
-    toUnitType === "GROUP"
-  ) {
-    return true;
-  }
-
-  // Sector → Directorate
-  //
-  // S → D1
-  // D1 → S
-  // S → D1 (REASSIGN)
-  if (
-    fromUnitType === "SECTOR" &&
-    toUnitType === "DIRECTORATE"
-  ) {
-    return true;
-  }
-
-  return false;
 }

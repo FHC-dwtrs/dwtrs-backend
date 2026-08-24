@@ -1,5 +1,9 @@
 import { z } from "zod";
-//for assigning a case to a unit
+
+// ============================================================
+// ASSIGN CASE
+// ============================================================
+
 export const assignCaseSchema = z.object({
   toUnitId: z.string().uuid(),
   remarks: z.string().max(1000).optional(),
@@ -7,18 +11,21 @@ export const assignCaseSchema = z.object({
 
 export type AssignCaseInput = z.infer<typeof assignCaseSchema>;
 
+// ============================================================
+// MAKE CASE DECISION
+// ============================================================
 
-//for making a decision on a case
 export const caseDecisionSchema = z.object({
   decisionType: z.enum(["APPROVED", "REJECTED"]),
   decisionText: z.string().max(2000).optional(),
 });
 
-export type CaseDecisionInput = z.infer<
-  typeof caseDecisionSchema
->;
+export type CaseDecisionInput = z.infer<typeof caseDecisionSchema>;
 
-//returning a case to the previous unit
+// ============================================================
+// RETURN CASE
+// ============================================================
+
 export const returnCaseSchema = z.object({
   remarks: z
     .string()
@@ -28,7 +35,10 @@ export const returnCaseSchema = z.object({
 
 export type ReturnCaseInput = z.infer<typeof returnCaseSchema>;
 
-//transferring a case to another unit
+// ============================================================
+// TRANSFER CASE
+// ============================================================
+
 export const transferCaseSchema = z.object({
   toUnitId: z.string().uuid(),
   remarks: z.string().max(1000).optional(),
@@ -36,12 +46,13 @@ export const transferCaseSchema = z.object({
 
 export type TransferCaseInput = z.infer<typeof transferCaseSchema>;
 
+// ============================================================
+// REASSIGN CASE
+// ============================================================
 
 export const reassignCaseSchema = z.object({
   toUnitId: z.string().uuid(),
-  remarks: z.string().optional(),
+  remarks: z.string().max(1000).optional(),
 });
 
-export type ReassignCaseInput = z.infer<
-  typeof reassignCaseSchema
->;
+export type ReassignCaseInput = z.infer<typeof reassignCaseSchema>;

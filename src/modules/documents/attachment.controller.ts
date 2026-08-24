@@ -3,7 +3,7 @@ import multer from "multer";
 
 import { AuthenticatedRequest } from "../../middleware/auth.middleware";
 
-import { createAttachment, deleteAttachment, getAttachmentFile, getAttachmentsByDocument } from "./attachment.service";
+import { createAttachment, deleteAttachment, getAttachmentFile, getAttachmentsByDocument, updateAttachment } from "./attachment.service";
 
 export const createAttachmentController = async (
   req: AuthenticatedRequest,
@@ -425,6 +425,146 @@ export const deleteAttachmentController = async (
       return res.status(500).json({
         success: false,
         message: "Failed to remove attachment",
+      });
+    }
+  };
+
+
+// ============================================================
+// UPDATE / REPLACE ATTACHMENT
+// ============================================================
+
+export const updateAttachmentController =
+  async (
+    req: AuthenticatedRequest,
+    res: Response,
+  ) => {
+    try {
+      const {
+        caseId,
+        documentId,
+        attachmentId,
+      } = req.params;
+
+      if (
+        typeof caseId !== "string" ||
+        typeof documentId !== "string" ||
+        typeof attachmentId !== "string"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid case ID, document ID, or attachment ID",
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Replacement attachment file is required",
+        });
+      }
+
+      const userId =
+        req.user?.sub;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+
+      const attachment =
+        await updateAttachment(
+          caseId,
+          documentId,
+          attachmentId,
+          userId,
+          req.file,
+        );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Attachment updated successfully",
+
+        data: {
+          attachmentId:
+            attachment.attachmentId,
+          documentId:
+            attachment.documentId,
+          fileName:
+            attachment.fileName,
+          storageKey:
+            attachment.storageKey,
+          mimeType:
+            attachment.mimeType,
+          fileSize:
+            attachment.fileSize.toString(),
+          checksum:
+            attachment.checksum,
+          uploadedBy:
+            attachment.uploadedBy,
+          uploadedAt:
+            attachment.uploadedAt,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Update attachment error:",
+        error,
+      );
+
+      if (
+        error instanceof multer.MulterError
+      ) {
+        if (
+          error.code ===
+          "LIMIT_FILE_SIZE"
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "File size must not exceed 10 MB",
+          });
+        }
+
+        return res.status(400).json({
+          success: false,
+          message:
+            `File upload error: ${error.message}`,
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "Attachment not found"
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Attachment not found",
+        });
+      }
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "Only PDF, JPEG, and PNG files are allowed."
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to update attachment",
       });
     }
   };

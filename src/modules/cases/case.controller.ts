@@ -1,12 +1,24 @@
 import type { Response } from "express";
+
 import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+
 import {
   getCases,
   getCaseById,
   createCase,
+  updateCase,
 } from "./case.service";
-import { createCaseSchema } from "./case.validation";
+
+import {
+  createCaseSchema,
+  updateCaseSchema,
+} from "./case.validation";
+
 import { serializeBigInt } from "../../utils/serializeBigInt";
+
+// ============================================================
+// GET CASES
+// ============================================================
 
 export async function getCasesController(
   req: AuthenticatedRequest,
@@ -29,6 +41,10 @@ export async function getCasesController(
   }
 }
 
+// ============================================================
+// GET CASE BY ID
+// ============================================================
+
 export async function getCaseByIdController(
   req: AuthenticatedRequest,
   res: Response,
@@ -37,10 +53,11 @@ export async function getCaseByIdController(
     const { caseId } = req.params;
 
     if (typeof caseId !== "string") {
-        return res.status(400).json({
-          message: "Invalid case ID",
-        });
-      }
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case ID",
+      });
+    }
 
     const caseRecord = await getCaseById(caseId);
 
@@ -65,44 +82,134 @@ export async function getCaseByIdController(
   }
 }
 
+// ============================================================
+// CREATE CASE
+// ============================================================
+
 export async function createCaseController(
-    req: AuthenticatedRequest,
-    res: Response,
-  ) {
-    try {
-      const parsed = createCaseSchema.safeParse(req.body);
-  
-      if (!parsed.success) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid case data.",
-          errors: parsed.error.flatten(),
-        });
-      }
-  
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-        });
-      }
-  
-      const caseRecord = await createCase(
-        parsed.data,
-        req.user.sub,
-      );
-  
-      return res.status(201).json({
-        success: true,
-        message: "Case created successfully.",
-        data: caseRecord,
-      });
-    } catch (error) {
-      console.error("Create case error:", error);
-  
-      return res.status(500).json({
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    const parsed =
+      createCaseSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
         success: false,
-        message: "Failed to create case.",
+        message: "Invalid case data.",
+        errors: parsed.error.flatten(),
       });
     }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const caseRecord = await createCase(
+      parsed.data,
+      req.user.sub,
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Case created successfully.",
+      data: serializeBigInt(caseRecord),
+    });
+  } catch (error) {
+    console.error("Create case error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create case.",
+    });
   }
+}
+
+// ============================================================
+// UPDATE CASE
+// ============================================================
+
+export async function updateCaseController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    // --------------------------------------------------------
+    // 1. Validate case ID
+    // --------------------------------------------------------
+
+    const { caseId } = req.params;
+
+    if (typeof caseId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case ID",
+      });
+    }
+
+    // --------------------------------------------------------
+    // 2. Validate request body
+    // --------------------------------------------------------
+
+    const parsed =
+      updateCaseSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case update data.",
+        errors: parsed.error.flatten(),
+      });
+    }
+
+    // --------------------------------------------------------
+    // 3. Authenticate user
+    // --------------------------------------------------------
+
+    const userId = req.user?.sub;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    // --------------------------------------------------------
+    // 4. Update case
+    // --------------------------------------------------------
+
+    const updatedCase = await updateCase(
+      caseId,
+      parsed.data,
+      userId,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Case updated successfully.",
+      data: serializeBigInt(updatedCase),
+    });
+  } catch (error) {
+    console.error("Update case error:", error);
+
+    if (
+      error instanceof Error &&
+      error.message === "Case not found"
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: "Case not found",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update case.",
+    });
+  }
+}

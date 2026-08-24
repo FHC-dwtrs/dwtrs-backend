@@ -5,6 +5,7 @@ import {
   getCasesController,
   getCaseByIdController,
   createCaseController,
+  updateCaseController,
 } from "./case.controller";
 
 const router = Router();
@@ -28,6 +29,17 @@ router.get(
   authenticate,
   authorize("CASE_VIEW"),
   getCaseByIdController,
+);
+
+// ============================================================
+// UPDATE CASE
+// ============================================================
+
+router.patch(
+  "/cases/:caseId",
+  authenticate,
+  authorize("CASE_UPDATE"),
+  updateCaseController,
 );
 
 export default router;
