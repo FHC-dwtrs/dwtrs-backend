@@ -2,8 +2,8 @@ import { Router } from "express";
 
 import { authenticate } from "../../middleware/auth.middleware";
 import { authorize } from "../../middleware/authorize";
-
 import { uploadDocument } from "../../config/upload";
+import { requireCaseAccess } from "../../middleware/case-access.middleware";
 
 import {
   createDocumentController,
@@ -11,17 +11,24 @@ import {
   getDocumentController,
   getDocumentsByCaseController,
 } from "./document.controller";
-import { requireCaseAccess } from "../../middleware/case-access.middleware";
-import { createAttachmentController } from "./attachment.controller";
+
+import {
+  createAttachmentController,
+  deleteAttachmentController,
+  getAttachmentController,
+  getAttachmentsByDocumentController,
+} from "./attachment.controller";
 
 const router = Router();
 
-/**
- * Upload a document to a case.
- *
- * Only Records & Archive users with DOCUMENT_UPLOAD
- * permission can perform this action.
- */
+// ============================================================
+// DOCUMENTS
+// ============================================================
+
+// ------------------------------------------------------------
+// UPLOAD DOCUMENT
+// ------------------------------------------------------------
+
 router.post(
   "/cases/:caseId/documents",
   authenticate,
@@ -30,23 +37,20 @@ router.post(
   createDocumentController,
 );
 
-// ============================================================
+// ------------------------------------------------------------
 // GET DOCUMENTS BY CASE
-// ============================================================
+// ------------------------------------------------------------
 
-/**
- * Any authenticated user who has access to the case
- * can view its documents.
- */
 router.get(
   "/cases/:caseId/documents",
   authenticate,
   requireCaseAccess,
   getDocumentsByCaseController,
 );
-// ============================================================
+
+// ------------------------------------------------------------
 // VIEW / DOWNLOAD DOCUMENT
-// ============================================================
+// ------------------------------------------------------------
 
 router.get(
   "/cases/:caseId/documents/:documentId",
@@ -55,28 +59,67 @@ router.get(
   getDocumentController,
 );
 
+// ------------------------------------------------------------
+// DELETE DOCUMENT
+// ------------------------------------------------------------
 
-/**
- * Soft delete a document.
- *
- * Only users with DOCUMENT_DELETE permission can
- * remove a document.
- */
 router.delete(
   "/cases/:caseId/documents/:documentId",
   authenticate,
+  requireCaseAccess,
   authorize("DOCUMENT_DELETE"),
   deleteDocumentController,
 );
 
+// ============================================================
+// ATTACHMENTS
+// ============================================================
+
+// ------------------------------------------------------------
+// UPLOAD ATTACHMENT
+// ------------------------------------------------------------
 
 router.post(
   "/cases/:caseId/documents/:documentId/attachments",
   authenticate,
+  requireCaseAccess,
   authorize("DOCUMENT_UPLOAD"),
   uploadDocument.single("file"),
   createAttachmentController,
 );
 
+// ------------------------------------------------------------
+// LIST ATTACHMENTS
+// ------------------------------------------------------------
+
+router.get(
+  "/cases/:caseId/documents/:documentId/attachments",
+  authenticate,
+  requireCaseAccess,
+  getAttachmentsByDocumentController,
+);
+
+// ------------------------------------------------------------
+// VIEW / DOWNLOAD ATTACHMENT
+// ------------------------------------------------------------
+
+router.get(
+  "/cases/:caseId/documents/:documentId/attachments/:attachmentId",
+  authenticate,
+  requireCaseAccess,
+  getAttachmentController,
+);
+
+// ============================================================
+// DELETE ATTACHMENT
+// ============================================================
+
+router.delete(
+  "/cases/:caseId/documents/:documentId/attachments/:attachmentId",
+  authenticate,
+  requireCaseAccess,
+  authorize("DOCUMENT_DELETE"),
+  deleteAttachmentController,
+);
 
 export default router;
