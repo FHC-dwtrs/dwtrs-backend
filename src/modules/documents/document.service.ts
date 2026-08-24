@@ -1,389 +1,210 @@
+import fs from "fs/promises";
+import crypto from "crypto";
+import path from "path";
+
 import prisma from "../../config/database";
-import { Prisma } from "../../generated/prisma/client";
-import type {
-  CreateDocumentInput,
-  UpdateDocumentInput,
-} from "./document.validation";
 
-// ============================================================
-// CREATE DOCUMENT
-// ============================================================
+interface CreateDocumentInput {
+  caseId: string;
+  documentType: string;
+  title: string;
+  file: Express.Multer.File;
+  uploadedBy: string;
+}
 
-export async function createDocument(
-  userId: string,
+const calculateChecksum = async (filePath: string): Promise<string> => {
+  const fileBuffer = await fs.readFile(filePath);
+
+  return crypto
+    .createHash("sha256")
+    .update(fileBuffer)
+    .digest("hex");
+};
+
+export const createDocument = async (
   input: CreateDocumentInput,
-) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // ========================================================
-    // 1. CHECK CASE
-    // ========================================================
+) => {
+  const {
+    caseId,
+    documentType,
+    title,
+    file,
+    uploadedBy,
+  } = input;
 
-    const caseRecord = await tx.case.findUnique({
-      where: {
-        caseId: input.caseId,
-      },
-    });
+  // ----------------------------------------------------------
+  // 1. Check that the case exists
+  // ----------------------------------------------------------
 
-    if (!caseRecord) {
-      throw new Error("Case not found.");
-    }
+  const existingCase = await prisma.case.findUnique({
+    where: {
+      caseId,
+    },
+  });
 
-    // ========================================================
-    // 2. CHECK USER
-    // ========================================================
+  if (!existingCase) {
+    throw new Error("Case not found");
+  }
 
-    const user = await tx.user.findUnique({
-      where: {
-        userId,
-      },
-    });
+  // ----------------------------------------------------------
+  // 2. Make sure a file was uploaded
+  // ----------------------------------------------------------
 
-    if (!user) {
-      throw new Error("User not found.");
-    }
+  if (!file) {
+    throw new Error("Document file is required");
+  }
 
-    if (!user.isActive) {
-      throw new Error("User is inactive.");
-    }
+  // ----------------------------------------------------------
+  // 3. Calculate SHA-256 checksum
+  // ----------------------------------------------------------
 
-    // ========================================================
-    // 3. CREATE DOCUMENT
-    // ========================================================
+  const checksum = await calculateChecksum(file.path);
 
-    const document = await tx.document.create({
+  try {
+    // --------------------------------------------------------
+    // 4. Create the document database record
+    // --------------------------------------------------------
+
+    const document = await prisma.document.create({
       data: {
-        caseId: input.caseId,
-        documentType: input.documentType,
-        title: input.title,
+        caseId,
+        documentType,
+        title,
 
-        fileName: input.fileName,
-        storageKey: input.storageKey,
-        mimeType: input.mimeType,
-        fileSize: input.fileSize,
+        fileName: file.originalname,
+        storageKey: file.path,
+        mimeType: file.mimetype,
+        fileSize: BigInt(file.size),
+        checksum,
 
-        checksum: input.checksum ?? null,
-
-        uploadedBy: userId,
-      },
-
-      include: {
-        case: true,
-        attachments: true,
-      },
-    });
-
-    // ========================================================
-    // 4. AUDIT
-    // ========================================================
-
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId: input.caseId,
-        action: "DOCUMENT_CREATED",
-        entityType: "DOCUMENT",
-        entityId: document.documentId,
-
-        oldValues: Prisma.JsonNull,
-
-        newValues: {
-          documentId: document.documentId,
-          caseId: input.caseId,
-          documentType: input.documentType,
-          title: input.title,
-          fileName: input.fileName,
-          storageKey: input.storageKey,
-          mimeType: input.mimeType,
-          fileSize: input.fileSize,
-          checksum: input.checksum ?? null,
-          uploadedBy: userId,
-        },
+        uploadedBy,
       },
     });
 
     return document;
+  } catch (error) {
+    // --------------------------------------------------------
+    // 5. Database failed → remove uploaded physical file
+    // --------------------------------------------------------
+
+    try {
+      await fs.unlink(file.path);
+    } catch (cleanupError) {
+      console.error(
+        "Failed to remove uploaded file after database error:",
+        cleanupError,
+      );
+    }
+
+    throw error;
+  }
+};
+
+export const getDocumentsByCase = async (caseId: string) => {
+  const existingCase = await prisma.case.findUnique({
+    where: {
+      caseId,
+    },
   });
-}
 
-// ============================================================
-// GET DOCUMENT BY ID
-// ============================================================
+  if (!existingCase) {
+    throw new Error("Case not found");
+  }
 
-export async function getDocumentById(
+  const documents = await prisma.document.findMany({
+    where: {
+      caseId,
+      deletedAt: null,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    select: {
+      documentId: true,
+      caseId: true,
+      documentType: true,
+      title: true,
+      fileName: true,
+      mimeType: true,
+      fileSize: true,
+      uploadedBy: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return documents;
+};
+
+export const getDocumentFile = async (
+  caseId: string,
   documentId: string,
-) {
-  const document = await prisma.document.findUnique({
+) => {
+  const document = await prisma.document.findFirst({
     where: {
       documentId,
-    },
-
-    include: {
-      case: true,
-      attachments: true,
+      caseId,
+      deletedAt: null,
     },
   });
 
   if (!document) {
-    throw new Error("Document not found.");
+    throw new Error("Document not found");
   }
 
-  return document;
-}
+  const filePath = path.resolve(document.storageKey);
 
-// ============================================================
-// GET DOCUMENTS BY CASE
-// ============================================================
+  try {
+    await fs.access(filePath);
+  } catch {
+    throw new Error("Document file not found");
+  }
 
-export async function getDocumentsByCase(
+  return {
+    document,
+    filePath,
+  };
+};
+
+
+/////delete
+
+export const deleteDocument = async (
   caseId: string,
-) {
-  // ========================================================
-  // CHECK CASE
-  // ========================================================
+  documentId: string,
+  deletedBy: string,
+  deletionReason: string,
+) => {
+  // ----------------------------------------------------------
+  // 1. Find the document
+  // ----------------------------------------------------------
 
-  const caseRecord = await prisma.case.findUnique({
+  const document = await prisma.document.findFirst({
     where: {
+      documentId,
       caseId,
+      deletedAt: null,
     },
   });
 
-  if (!caseRecord) {
-    throw new Error("Case not found.");
+  if (!document) {
+    throw new Error("Document not found");
   }
 
-  // ========================================================
-  // GET DOCUMENTS
-  // ========================================================
+  // ----------------------------------------------------------
+  // 2. Soft delete the document
+  // ----------------------------------------------------------
 
-  return prisma.document.findMany({
+  const deletedDocument = await prisma.document.update({
     where: {
-      caseId,
-    },
-
-    orderBy: {
-      createdAt: "desc",
-    },
-
-    include: {
-      attachments: true,
-    },
-  });
-}
-
-// ============================================================
-// UPDATE DOCUMENT
-// ============================================================
-
-export async function updateDocument(
-  documentId: string,
-  userId: string,
-  input: UpdateDocumentInput,
-) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // ========================================================
-    // 1. FIND DOCUMENT
-    // ========================================================
-
-    const existingDocument =
-      await tx.document.findUnique({
-        where: {
-          documentId,
-        },
-      });
-
-    if (!existingDocument) {
-      throw new Error("Document not found.");
-    }
-
-    // ========================================================
-    // 2. CHECK USER
-    // ========================================================
-
-    const user = await tx.user.findUnique({
-      where: {
-        userId,
-      },
-    });
-
-    if (!user) {
-      throw new Error("User not found.");
-    }
-
-    if (!user.isActive) {
-      throw new Error("User is inactive.");
-    }
-
-    // ========================================================
-    // 3. UPDATE DOCUMENT
-    // ========================================================
-
-    const updatedDocument =
-      await tx.document.update({
-        where: {
-          documentId,
-        },
-
-        data: {
-          ...(input.documentType !== undefined && {
-            documentType: input.documentType,
-          }),
-
-          ...(input.title !== undefined && {
-            title: input.title,
-          }),
-
-          ...(input.fileName !== undefined && {
-            fileName: input.fileName,
-          }),
-
-          ...(input.storageKey !== undefined && {
-            storageKey: input.storageKey,
-          }),
-
-          ...(input.mimeType !== undefined && {
-            mimeType: input.mimeType,
-          }),
-
-          ...(input.fileSize !== undefined && {
-            fileSize: input.fileSize,
-          }),
-
-          ...(input.checksum !== undefined && {
-            checksum: input.checksum,
-          }),
-        },
-
-        include: {
-          case: true,
-          attachments: true,
-        },
-      });
-
-    // ========================================================
-    // 4. AUDIT
-    // ========================================================
-
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId: existingDocument.caseId,
-        action: "DOCUMENT_UPDATED",
-        entityType: "DOCUMENT",
-        entityId: documentId,
-
-        oldValues: {
-          documentType: existingDocument.documentType,
-          title: existingDocument.title,
-          fileName: existingDocument.fileName,
-          storageKey: existingDocument.storageKey,
-          mimeType: existingDocument.mimeType,
-          fileSize: existingDocument.fileSize.toString(),
-          checksum: existingDocument.checksum,
-        },
-
-        newValues: {
-          documentType: updatedDocument.documentType,
-          title: updatedDocument.title,
-          fileName: updatedDocument.fileName,
-          storageKey: updatedDocument.storageKey,
-          mimeType: updatedDocument.mimeType,
-          fileSize: updatedDocument.fileSize.toString(),
-          checksum: updatedDocument.checksum,
-        },
-      },
-    });
-
-    return updatedDocument;
-  });
-}
-
-// ============================================================
-// DELETE DOCUMENT
-// ============================================================
-
-export async function deleteDocument(
-  documentId: string,
-  userId: string,
-) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // ========================================================
-    // 1. FIND DOCUMENT
-    // ========================================================
-
-    const existingDocument =
-      await tx.document.findUnique({
-        where: {
-          documentId,
-        },
-
-        include: {
-          attachments: true,
-        },
-      });
-
-    if (!existingDocument) {
-      throw new Error("Document not found.");
-    }
-
-    // ========================================================
-    // 2. CHECK USER
-    // ========================================================
-
-    const user = await tx.user.findUnique({
-      where: {
-        userId,
-      },
-    });
-
-    if (!user) {
-      throw new Error("User not found.");
-    }
-
-    if (!user.isActive) {
-      throw new Error("User is inactive.");
-    }
-
-    // ========================================================
-    // 3. DELETE DOCUMENT
-    // ========================================================
-
-    await tx.document.delete({
-      where: {
-        documentId,
-      },
-    });
-
-    // ========================================================
-    // 4. AUDIT
-    // ========================================================
-
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId: existingDocument.caseId,
-        action: "DOCUMENT_DELETED",
-        entityType: "DOCUMENT",
-        entityId: documentId,
-
-        oldValues: {
-          documentType: existingDocument.documentType,
-          title: existingDocument.title,
-          fileName: existingDocument.fileName,
-          storageKey: existingDocument.storageKey,
-          mimeType: existingDocument.mimeType,
-          fileSize: existingDocument.fileSize.toString(),
-          checksum: existingDocument.checksum,
-          attachmentCount:
-            existingDocument.attachments.length,
-        },
-
-        newValues: Prisma.JsonNull,
-      },
-    });
-
-    return {
       documentId,
-      message: "Document deleted successfully.",
-    };
+    },
+    data: {
+      deletedAt: new Date(),
+      deletedBy,
+      deletionReason,
+    },
   });
-}
+
+  return deletedDocument;
+};

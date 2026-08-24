@@ -3,70 +3,64 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/auth.middleware";
 import { authorize } from "../../middleware/authorize";
 
+import { uploadDocument } from "../../config/upload";
+
 import {
   createDocumentController,
-  getDocumentByIdController,
-  getDocumentsByCaseController,
-  updateDocumentController,
   deleteDocumentController,
+  getDocumentController,
+  getDocumentsByCaseController,
 } from "./document.controller";
 
 const router = Router();
 
-// ============================================================
-// CREATE DOCUMENT
-// ============================================================
-
+/**
+ * Upload a document to a case.
+ *
+ * Only Records & Archive users with DOCUMENT_UPLOAD
+ * permission can perform this action.
+ */
 router.post(
-  "/",
+  "/cases/:caseId/documents",
   authenticate,
-  authorize("DOCUMENT_CREATE"),
+  authorize("DOCUMENT_UPLOAD"),
+  uploadDocument.single("file"),
   createDocumentController,
 );
 
 // ============================================================
 // GET DOCUMENTS BY CASE
-// IMPORTANT: Must come BEFORE /:documentId
 // ============================================================
 
+/**
+ * Any authenticated user who has access to the case
+ * can view its documents.
+ */
 router.get(
-  "/case/:caseId",
+  "/cases/:caseId/documents",
   authenticate,
-  authorize("DOCUMENT_VIEW"),
   getDocumentsByCaseController,
 );
 
-
-
-
 // ============================================================
-// GET ONE DOCUMENT
+// VIEW / DOWNLOAD DOCUMENT
 // ============================================================
 
 router.get(
-  "/:documentId",
+  "/cases/:caseId/documents/:documentId",
   authenticate,
-  authorize("DOCUMENT_VIEW"),
-  getDocumentByIdController,
+  getDocumentController,
 );
 
-// ============================================================
-// UPDATE DOCUMENT
-// ============================================================
 
-router.patch(
-  "/:documentId",
-  authenticate,
-  authorize("DOCUMENT_UPDATE"),
-  updateDocumentController,
-);
-
-// ============================================================
-// DELETE DOCUMENT
-// ============================================================
-
+/**
+ * Soft delete a document.
+ *
+ * Only users with DOCUMENT_DELETE permission can
+ * remove a document.
+ */
 router.delete(
-  "/:documentId",
+  "/cases/:caseId/documents/:documentId",
   authenticate,
   authorize("DOCUMENT_DELETE"),
   deleteDocumentController,
