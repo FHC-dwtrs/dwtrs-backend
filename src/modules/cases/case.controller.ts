@@ -6,6 +6,7 @@ import {
   createCase,
 } from "./case.service";
 import { createCaseSchema } from "./case.validation";
+import { serializeBigInt } from "../../utils/serializeBigInt";
 
 export async function getCasesController(
   req: AuthenticatedRequest,
@@ -16,7 +17,7 @@ export async function getCasesController(
 
     return res.status(200).json({
       success: true,
-      data: cases,
+      data: serializeBigInt(cases),
     });
   } catch (error) {
     console.error("Get cases error:", error);
@@ -52,7 +53,7 @@ export async function getCaseByIdController(
 
     return res.status(200).json({
       success: true,
-      data: caseRecord,
+      data: serializeBigInt(caseRecord),
     });
   } catch (error) {
     console.error("Get case error:", error);

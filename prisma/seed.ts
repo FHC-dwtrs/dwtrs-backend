@@ -128,52 +128,64 @@ const permissions = [
     resource: "CUSTOMER",
     action: "UPDATE",
   },
+// ==========================================================
+// DOCUMENT
+// ==========================================================
 
-  // ==========================================================
-  // DOCUMENT
-  // ==========================================================
+{
+  name: "DOCUMENT_CREATE",
+  description: "Create and upload a document.",
+  resource: "DOCUMENT",
+  action: "CREATE",
+},
+{
+  name: "DOCUMENT_VIEW",
+  description: "View documents.",
+  resource: "DOCUMENT",
+  action: "VIEW",
+},
+{
+  name: "DOCUMENT_UPDATE",
+  description: "Update document metadata.",
+  resource: "DOCUMENT",
+  action: "UPDATE",
+},
+{
+  name: "DOCUMENT_DELETE",
+  description: "Soft delete a document.",
+  resource: "DOCUMENT",
+  action: "DELETE",
+},
 
-  {
-    name: "DOCUMENT_CREATE",
-    description: "Create and register a document.",
-    resource: "DOCUMENT",
-    action: "CREATE",
-  },
-  {
-    name: "DOCUMENT_VIEW",
-    description: "View documents.",
-    resource: "DOCUMENT",
-    action: "VIEW",
-  },
-  {
-    name: "DOCUMENT_UPDATE",
-    description: "Update document metadata.",
-    resource: "DOCUMENT",
-    action: "UPDATE",
-  },
 
-  // ==========================================================
-  // ATTACHMENT
-  // ==========================================================
+// ==========================================================
+// ATTACHMENT
+// ==========================================================
 
-  {
-    name: "ATTACHMENT_UPLOAD",
-    description: "Upload an attachment.",
-    resource: "ATTACHMENT",
-    action: "UPLOAD",
-  },
-  {
-    name: "ATTACHMENT_VIEW",
-    description: "View attachments.",
-    resource: "ATTACHMENT",
-    action: "VIEW",
-  },
-  {
-    name: "ATTACHMENT_UPDATE",
-    description: "Update attachment metadata.",
-    resource: "ATTACHMENT",
-    action: "UPDATE",
-  },
+{
+  name: "ATTACHMENT_UPLOAD",
+  description: "Upload an attachment to a document.",
+  resource: "ATTACHMENT",
+  action: "UPLOAD",
+},
+{
+  name: "ATTACHMENT_VIEW",
+  description: "View document attachments.",
+  resource: "ATTACHMENT",
+  action: "VIEW",
+},
+{
+  name: "ATTACHMENT_UPDATE",
+  description: "Update attachment metadata.",
+  resource: "ATTACHMENT",
+  action: "UPDATE",
+},
+{
+  name: "ATTACHMENT_DELETE",
+  description: "Soft delete a document attachment.",
+  resource: "ATTACHMENT",
+  action: "DELETE",
+},
 
   // ==========================================================
   // WORKFLOW
@@ -496,10 +508,12 @@ const rolePermissions: Record<string, string[]> = {
     "DOCUMENT_CREATE",
     "DOCUMENT_VIEW",
     "DOCUMENT_UPDATE",
+    "DOCUMENT_DELETE",
 
     "ATTACHMENT_UPLOAD",
     "ATTACHMENT_VIEW",
     "ATTACHMENT_UPDATE",
+    "ATTACHMENT_DELETE",
 
     "WORKFLOW_ASSIGN",
     "WORKFLOW_REASSIGN",

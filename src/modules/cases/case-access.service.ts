@@ -1,4 +1,4 @@
-import prisma from "../../config/database";
+/*import prisma from "../../config/database";
 
 /**
  * Checks whether a user has access to a case.
@@ -9,7 +9,7 @@ import prisma from "../../config/database";
  * This is based on Case.currentUnitId, which is updated whenever
  * the case moves through the workflow.
  */
-export const hasCaseAccess = async (
+/*export const hasCaseAccess = async (
   caseId: string,
   userId: string,
 ): Promise<boolean> => {
@@ -40,4 +40,4 @@ export const hasCaseAccess = async (
   }
 
   return caseRecord.currentUnitId === user.unitId;
-};
+};*/

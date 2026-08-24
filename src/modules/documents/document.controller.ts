@@ -87,7 +87,17 @@ export const createDocumentController = async (
     return res.status(201).json({
       success: true,
       message: "Document uploaded successfully",
-      data: document,
+      data: {
+        documentId: document.documentId,
+        caseId: document.caseId,
+        documentType: document.documentType,
+        title: document.title,
+        fileName: document.fileName,
+        storageKey: document.storageKey,
+        mimeType: document.mimeType,
+        fileSize: document.fileSize.toString(),
+        checksum: document.checksum,
+      },
     });
   } catch (error) {
     console.error("Create document error:", error);
@@ -185,7 +195,10 @@ export const getDocumentsByCaseController = async (
     return res.status(200).json({
       success: true,
       message: "Documents retrieved successfully",
-      data: documents,
+      data: documents.map((document) => ({
+        ...document,
+        fileSize: document.fileSize.toString(),
+      })),
     });
   } catch (error) {
     console.error("Get documents by case error:", error);

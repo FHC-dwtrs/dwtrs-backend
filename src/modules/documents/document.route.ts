@@ -3,7 +3,7 @@ import { Router } from "express";
 import { authenticate } from "../../middleware/auth.middleware";
 import { authorize } from "../../middleware/authorize";
 import { uploadDocument } from "../../config/upload";
-import { requireCaseAccess } from "../../middleware/case-access.middleware";
+//import { requireCaseAccess } from "../../middleware/case-access.middleware";
 
 import {
   createDocumentController,
@@ -18,6 +18,7 @@ import {
   getAttachmentController,
   getAttachmentsByDocumentController,
 } from "./attachment.controller";
+import { requireRecordsArchive } from "../../middleware/requireRecordsArchive";
 
 const router = Router();
 
@@ -32,7 +33,9 @@ const router = Router();
 router.post(
   "/cases/:caseId/documents",
   authenticate,
-  authorize("DOCUMENT_UPLOAD"),
+  requireRecordsArchive,
+  authorize("DOCUMENT_CREATE"),
+  
   uploadDocument.single("file"),
   createDocumentController,
 );
@@ -44,7 +47,7 @@ router.post(
 router.get(
   "/cases/:caseId/documents",
   authenticate,
-  requireCaseAccess,
+ // requireCaseAccess,
   getDocumentsByCaseController,
 );
 
@@ -55,7 +58,7 @@ router.get(
 router.get(
   "/cases/:caseId/documents/:documentId",
   authenticate,
-  requireCaseAccess,
+  //requireCaseAccess,
   getDocumentController,
 );
 
@@ -66,7 +69,7 @@ router.get(
 router.delete(
   "/cases/:caseId/documents/:documentId",
   authenticate,
-  requireCaseAccess,
+  //requireCaseAccess,
   authorize("DOCUMENT_DELETE"),
   deleteDocumentController,
 );
@@ -82,8 +85,10 @@ router.delete(
 router.post(
   "/cases/:caseId/documents/:documentId/attachments",
   authenticate,
-  requireCaseAccess,
-  authorize("DOCUMENT_UPLOAD"),
+  //requireCaseAccess,
+  requireRecordsArchive,
+  authorize("ATTACHMENT_UPLOAD"),
+ 
   uploadDocument.single("file"),
   createAttachmentController,
 );
@@ -95,7 +100,7 @@ router.post(
 router.get(
   "/cases/:caseId/documents/:documentId/attachments",
   authenticate,
-  requireCaseAccess,
+  //requireCaseAccess,
   getAttachmentsByDocumentController,
 );
 
@@ -106,7 +111,7 @@ router.get(
 router.get(
   "/cases/:caseId/documents/:documentId/attachments/:attachmentId",
   authenticate,
-  requireCaseAccess,
+  //requireCaseAccess,
   getAttachmentController,
 );
 
@@ -117,8 +122,8 @@ router.get(
 router.delete(
   "/cases/:caseId/documents/:documentId/attachments/:attachmentId",
   authenticate,
-  requireCaseAccess,
-  authorize("DOCUMENT_DELETE"),
+  //requireCaseAccess,
+  authorize("ATTACHMENT_DELETE"),
   deleteAttachmentController,
 );
 

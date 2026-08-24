@@ -60,7 +60,10 @@ export const createAttachmentController = async (
     return res.status(201).json({
       success: true,
       message: "Attachment uploaded successfully",
-      data: attachment,
+      data: {
+        ...attachment,
+        fileSize: attachment.fileSize.toString(),
+      },
     });
   } catch (error) {
     console.error("Create attachment error:", error);
@@ -168,7 +171,10 @@ export const getAttachmentsByDocumentController = async (
       return res.status(200).json({
         success: true,
         message: "Attachments retrieved successfully",
-        data: attachments,
+        data: attachments.map((attachment) => ({
+          ...attachment,
+          fileSize: attachment.fileSize.toString(),
+        })),
       });
     } catch (error) {
       console.error(

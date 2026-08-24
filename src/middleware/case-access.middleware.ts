@@ -1,4 +1,4 @@
-import type { NextFunction, Response } from "express";
+/*import type { NextFunction, Response } from "express";
 
 import type { AuthenticatedRequest } from "./auth.middleware";
 
@@ -65,4 +65,4 @@ export const requireCaseAccess = async (
       message: "Failed to verify case access.",
     });
   }
-};
+};*/
