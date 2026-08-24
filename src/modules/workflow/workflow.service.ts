@@ -1,6 +1,8 @@
 import prisma from "../../config/database";
 import { Prisma } from "../../generated/prisma/client";
+import { createAuditLog } from "../audit/audit.service";
 import { notifyUnitUsers } from "../notifications/notification.service";
+
 import type {
   AssignCaseInput,
   CaseDecisionInput,
@@ -241,24 +243,22 @@ export async function assignCase(
     // 13. AUDIT LOG
     // ========================================================
 
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId,
-        action: "CASE_ASSIGNED",
-        entityType: "CASE",
-        entityId: caseId,
-
-        oldValues: {
-          currentUnitId: caseRecord.currentUnitId,
-          status: caseRecord.status,
-        },
-
-        newValues: {
-          currentUnitId: toUnit.unitId,
-          status: "UNDER_REVIEW",
-          assignmentId: assignment.assignmentId,
-        },
+    await createAuditLog(tx, {
+      userId,
+      caseId,
+      action: "CASE_ASSIGNED",
+      entityType: "CASE",
+      entityId: caseId,
+    
+      oldValues: {
+        currentUnitId: caseRecord.currentUnitId,
+        status: caseRecord.status,
+      },
+    
+      newValues: {
+        currentUnitId: toUnit.unitId,
+        status: "UNDER_REVIEW",
+        assignmentId: assignment.assignmentId,
       },
     });
     await notifyUnitUsers(tx, {
@@ -599,27 +599,26 @@ export async function returnCase(
     // 10. AUDIT LOG
     // ========================================================
 
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId,
-        action: "CASE_RETURNED",
-        entityType: "CASE",
-        entityId: caseId,
-
-        oldValues: {
-          currentUnitId: user.unitId,
-          status: caseRecord.status,
-        },
-
-        newValues: {
-          currentUnitId: destinationUnit.unitId,
-          status: "SENT_BACK_FOR_CORRECTION",
-          assignmentId: assignment.assignmentId,
-          remarks: input.remarks,
-        },
+    await createAuditLog(tx, {
+      userId,
+      caseId,
+      action: "CASE_RETURNED",
+      entityType: "CASE",
+      entityId: caseId,
+    
+      oldValues: {
+        currentUnitId: user.unitId,
+        status: caseRecord.status,
+      },
+    
+      newValues: {
+        currentUnitId: destinationUnit.unitId,
+        status: "SENT_BACK_FOR_CORRECTION",
+        assignmentId: assignment.assignmentId,
+        remarks: input.remarks,
       },
     });
+
     await notifyUnitUsers(tx, {
       unitId: destinationUnit.unitId,
       caseId,
@@ -986,27 +985,26 @@ export async function reassignCase(
     // 14. AUDIT LOG
     // ========================================================
 
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId,
-        action: "CASE_REASSIGNED",
-        entityType: "CASE",
-        entityId: caseId,
-
-        oldValues: {
-          currentUnitId: currentUnit.unitId,
-          status: caseRecord.status,
-        },
-
-        newValues: {
-          currentUnitId: toUnit.unitId,
-          status: "UNDER_REVIEW",
-          assignmentId: assignment.assignmentId,
-          remarks: input.remarks,
-        },
+    await createAuditLog(tx, {
+      userId,
+      caseId,
+      action: "CASE_REASSIGNED",
+      entityType: "CASE",
+      entityId: caseId,
+    
+      oldValues: {
+        currentUnitId: currentUnit.unitId,
+        status: caseRecord.status,
+      },
+    
+      newValues: {
+        currentUnitId: toUnit.unitId,
+        status: "UNDER_REVIEW",
+        assignmentId: assignment.assignmentId,
+        remarks: input.remarks,
       },
     });
+
     await notifyUnitUsers(tx, {
       unitId: toUnit.unitId,
       caseId,
@@ -1256,30 +1254,28 @@ export async function makeCaseDecision(
       // 11. AUDIT LOG
       // ======================================================
 
-      await tx.auditLog.create({
-        data: {
-          userId,
-          caseId,
-          action:
-            input.decisionType === "APPROVED"
-              ? "CASE_APPROVED"
-              : "CASE_REJECTED",
-          entityType: "CASE",
-          entityId: caseId,
-
-          oldValues: {
-            status: caseRecord.status,
-            currentUnitId: caseRecord.currentUnitId,
-          },
-
-          newValues: {
-            status: newStatus,
-            currentUnitId: caseRecord.currentUnitId,
-            decisionId: decision.decisionId,
-            decisionType: input.decisionType,
-            decisionText:
-              input.decisionText ?? null,
-          },
+      await createAuditLog(tx, {
+        userId,
+        caseId,
+        action:
+          input.decisionType === "APPROVED"
+            ? "CASE_APPROVED"
+            : "CASE_REJECTED",
+      
+        entityType: "CASE",
+        entityId: caseId,
+      
+        oldValues: {
+          status: caseRecord.status,
+          currentUnitId: caseRecord.currentUnitId,
+        },
+      
+        newValues: {
+          status: newStatus,
+          currentUnitId: caseRecord.currentUnitId,
+          decisionId: decision.decisionId,
+          decisionType: input.decisionType,
+          decisionText: input.decisionText ?? null,
         },
       });
       const recordsArchive =
@@ -1541,27 +1537,23 @@ export async function transferCase(
     // 13. AUDIT LOG
     // ========================================================
 
-    await tx.auditLog.create({
-      data: {
-        userId,
-        caseId,
-        action: "CASE_TRANSFERRED",
-        entityType: "CASE",
-        entityId: caseId,
-
-        oldValues: {
-          currentUnitId: user.unitId,
-          status: caseRecord.status,
-        },
-
-        newValues: {
-          currentUnitId: toUnit.unitId,
-          status: "UNDER_REVIEW",
-          assignmentId:
-            transferAssignment.assignmentId,
-          transferType:
-            "DIRECTORATE_TO_DIRECTORATE",
-        },
+    await createAuditLog(tx, {
+      userId,
+      caseId,
+      action: "CASE_TRANSFERRED",
+      entityType: "CASE",
+      entityId: caseId,
+    
+      oldValues: {
+        currentUnitId: user.unitId,
+        status: caseRecord.status,
+      },
+    
+      newValues: {
+        currentUnitId: toUnit.unitId,
+        status: "UNDER_REVIEW",
+        assignmentId: transferAssignment.assignmentId,
+        transferType: "DIRECTORATE_TO_DIRECTORATE",
       },
     });
     await notifyUnitUsers(tx, {
