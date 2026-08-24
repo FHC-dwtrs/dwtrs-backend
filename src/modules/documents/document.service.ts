@@ -169,6 +169,7 @@ export const getDocumentFile = async (
 
 /////delete
 
+
 export const deleteDocument = async (
   caseId: string,
   documentId: string,
@@ -183,7 +184,6 @@ export const deleteDocument = async (
     where: {
       documentId,
       caseId,
-      deletedAt: null,
     },
   });
 
@@ -192,8 +192,18 @@ export const deleteDocument = async (
   }
 
   // ----------------------------------------------------------
-  // 2. Soft delete the document
+  // 2. Make sure the document is not already deleted
   // ----------------------------------------------------------
+
+  if (document.deletedAt) {
+    throw new Error("Document already deleted");
+  }
+
+  // ----------------------------------------------------------
+  // 3. Soft delete the document
+  // ----------------------------------------------------------
+  // We DO NOT delete the physical file.
+  // The document remains available for audit/history purposes.
 
   const deletedDocument = await prisma.document.update({
     where: {

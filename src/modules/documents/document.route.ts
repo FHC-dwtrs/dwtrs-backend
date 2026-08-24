@@ -11,6 +11,7 @@ import {
   getDocumentController,
   getDocumentsByCaseController,
 } from "./document.controller";
+import { requireCaseAccess } from "../../middleware/case-access.middleware";
 
 const router = Router();
 
@@ -39,9 +40,9 @@ router.post(
 router.get(
   "/cases/:caseId/documents",
   authenticate,
+  requireCaseAccess,
   getDocumentsByCaseController,
 );
-
 // ============================================================
 // VIEW / DOWNLOAD DOCUMENT
 // ============================================================
@@ -49,6 +50,7 @@ router.get(
 router.get(
   "/cases/:caseId/documents/:documentId",
   authenticate,
+  requireCaseAccess,
   getDocumentController,
 );
 
