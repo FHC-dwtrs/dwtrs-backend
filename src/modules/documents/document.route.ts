@@ -12,6 +12,7 @@ import {
   getDocumentsByCaseController,
 } from "./document.controller";
 import { requireCaseAccess } from "../../middleware/case-access.middleware";
+import { createAttachmentController } from "./attachment.controller";
 
 const router = Router();
 
@@ -67,5 +68,15 @@ router.delete(
   authorize("DOCUMENT_DELETE"),
   deleteDocumentController,
 );
+
+
+router.post(
+  "/cases/:caseId/documents/:documentId/attachments",
+  authenticate,
+  authorize("DOCUMENT_UPLOAD"),
+  uploadDocument.single("file"),
+  createAttachmentController,
+);
+
 
 export default router;
