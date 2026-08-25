@@ -5,6 +5,7 @@ import {
 } from "./case.validation";
 
 import { Prisma } from "../../generated/prisma/client";
+import { createCustomer, getCustomerByPhone, updateCustomer } from "../customers/customer.service";
 // ============================================================
 // GET ALL CASES
 // ============================================================
@@ -119,14 +120,17 @@ export async function createCase(
     // 2. CREATE CUSTOMER
     // --------------------------------------------------------
 
-    const customer = await tx.customer.create({
-      data: {
-        name: input.customer.name,
-        phone: input.customer.phone,
-        email: input.customer.email,
-        address: input.customer.address,
-      },
-    });
+    let customer = await getCustomerByPhone(
+      input.customer.phone,
+      tx,
+    );
+    
+    if (!customer) {
+      customer = await createCustomer(
+        input.customer,
+        tx,
+      );
+    }
 
     // --------------------------------------------------------
     // 3. GENERATE TRACKING NUMBER
@@ -251,34 +255,14 @@ export async function updateCase(
     // --------------------------------------------------------
     // 3. UPDATE CUSTOMER
     // --------------------------------------------------------
-
     if (input.customer) {
-      await tx.customer.update({
-        where: {
-          customerId:
-            existingCase.customerId,
-        },
-
-        data: {
-          ...(input.customer.name !== undefined && {
-            name: input.customer.name,
-          }),
-
-          ...(input.customer.phone !== undefined && {
-            phone: input.customer.phone,
-          }),
-
-          ...(input.customer.email !== undefined && {
-            email: input.customer.email,
-          }),
-
-          ...(input.customer.address !== undefined && {
-            address: input.customer.address,
-          }),
-        },
-      });
+      await updateCustomer(
+        existingCase.customerId,
+        input.customer,
+        tx,
+      );
     }
-
+   
     // --------------------------------------------------------
     // 4. UPDATE CASE
     // --------------------------------------------------------

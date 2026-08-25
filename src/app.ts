@@ -5,7 +5,7 @@ import workflowRoutes from "./modules/workflow/workflow.routes";
 import documentRoutes from "./modules/documents/document.route";
 import notificationRoutes from "./modules/notifications/notification.route";
 import reportsRoutes from "./modules/reports/reports.route";
-
+import customerRoutes from "./modules/customers/customer.routes";
 const app = express();
 
 app.use(express.json());
@@ -28,8 +28,11 @@ app.use("/api/v1/workflow", workflowRoutes); //to what assign
 
 app.use("/api/v1", documentRoutes);
 
+
 app.use("/api/v1", notificationRoutes);
 
 app.use("/api/v1/reports", reportsRoutes);
+
+app.use("/customers", customerRoutes);
 
 export default app;
