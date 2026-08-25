@@ -7,6 +7,7 @@ import notificationRoutes from "./modules/notifications/notification.route";
 import reportsRoutes from "./modules/reports/reports.route";
 import customerRoutes from "./modules/customers/customer.routes";
 import organizationRoutes from "./modules/organizations/organization.routes";
+import userRoutes from "./modules/users/user.routes";
 const app = express();
 
 app.use(express.json());
@@ -37,5 +38,7 @@ app.use("/api/v1/reports", reportsRoutes);
 app.use("/customers", customerRoutes);
 
 app.use("/organizations", organizationRoutes);
+
+app.use("/api/v1", userRoutes);
 
 export default app;
