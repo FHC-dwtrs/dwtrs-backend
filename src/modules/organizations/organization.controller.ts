@@ -1,5 +1,5 @@
 import type { Response } from "express";
-
+import prisma from "../../config/database";
 import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
 
 import {
@@ -120,6 +120,44 @@ export async function getOrganizationsController(
         errors: parsed.error.flatten(),
       });
     }
+
+    const requiredPermission = parsed.data.isActive
+  ? "UNIT_ACTIVATE"
+  : "UNIT_DEACTIVATE";
+
+const userRoles = await prisma.userRole.findMany({
+  where: {
+    userId: req.user!.sub,
+    role: {
+      isActive: true,
+    },
+  },
+  include: {
+    role: {
+      include: {
+        permissions: {
+          include: {
+            permission: true,
+          },
+        },
+      },
+    },
+  },
+});
+
+const hasPermission = userRoles.some((userRole) =>
+  userRole.role.permissions.some(
+    (rolePermission) =>
+      rolePermission.permission.name === requiredPermission,
+  ),
+);
+
+if (!hasPermission) {
+  return res.status(403).json({
+    success: false,
+    message: "You do not have permission to perform this action.",
+  });
+}
 
     const result =
       await getOrganizations(parsed.data);

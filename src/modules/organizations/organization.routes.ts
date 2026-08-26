@@ -22,7 +22,7 @@ const router = Router();
 router.get(
   "/",
   authenticate,
-  authorize("ORGANIZATION_VIEW"),
+  authorize("UNIT_VIEW"),
   getOrganizationsController,
 );
 
@@ -33,7 +33,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorize("ORGANIZATION_CREATE"),
+  authorize("UNIT_CREATE"),
   createOrganizationController,
 );
 
@@ -44,7 +44,7 @@ router.post(
 router.get(
   "/:unitId/children",
   authenticate,
-  authorize("ORGANIZATION_VIEW"),
+  authorize("UNIT_VIEW"),
   getOrganizationChildrenController,
 );
 
@@ -55,7 +55,7 @@ router.get(
 router.get(
   "/:unitId/users",
   authenticate,
-  authorize("ORGANIZATION_VIEW"),
+  authorize("UNIT_VIEW"),
   getOrganizationUsersController,
 );
 
@@ -66,7 +66,7 @@ router.get(
 router.get(
   "/:unitId",
   authenticate,
-  authorize("ORGANIZATION_VIEW"),
+  authorize("UNIT_VIEW"),
   getOrganizationByIdController,
 );
 
@@ -77,7 +77,7 @@ router.get(
 router.patch(
   "/:unitId",
   authenticate,
-  authorize("ORGANIZATION_UPDATE"),
+  authorize("UNIT_UPDATE"),
   updateOrganizationController,
 );
 
@@ -88,7 +88,8 @@ router.patch(
 router.patch(
   "/:unitId/status",
   authenticate,
-  authorize("ORGANIZATION_UPDATE"),
+ // authorize("UNIT_UPDATE"),
+ //authorize("UNIT_DEACTIVATE"),
   updateOrganizationStatusController,
 );
 

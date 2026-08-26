@@ -35,9 +35,9 @@ app.use("/api/v1", notificationRoutes);
 
 app.use("/api/v1/reports", reportsRoutes);
 
-app.use("/customers", customerRoutes);
+app.use("/api/v1/customers", customerRoutes);
 
-app.use("/organizations", organizationRoutes);
+app.use("/api/v1/organizations", organizationRoutes);
 
 app.use("/api/v1", userRoutes);
 
