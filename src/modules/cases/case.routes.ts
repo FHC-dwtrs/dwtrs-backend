@@ -36,7 +36,7 @@ router.get(
 // ============================================================
 
 router.patch(
-  "/cases/:caseId",
+  "/:caseId",
   authenticate,
   authorize("CASE_UPDATE"),
   updateCaseController,
