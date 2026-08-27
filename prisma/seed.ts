@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import argon2 from "argon2";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -654,157 +655,6 @@ const rolePermissions: Record<string, string[]> = {
   ],
 };
 
-// ============================================================
-// ORGANIZATIONAL UNITS
-// ============================================================
-
-const organizationalUnits = [
-  // ==========================================================
-  // SECTORS
-  // ==========================================================
-
-  {
-    name: "Housing Development Sector",
-    unitType: "SECTOR" as const,
-    parentName: null,
-  },
-  {
-    name: "Corporate Service Sector",
-    unitType: "SECTOR" as const,
-    parentName: null,
-  },
-  {
-    name: "Houses Administration Sector",
-    unitType: "SECTOR" as const,
-    parentName: null,
-  },
-  {
-    name: "Construction Input Supply Sector",
-    unitType: "SECTOR" as const,
-    parentName: null,
-  },
-
-  // ==========================================================
-  // HOUSING DEVELOPMENT SECTOR
-  // ==========================================================
-
-  {
-    name: "Project Monitoring Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Housing Development Sector",
-  },
-  {
-    name: "Land & Infrastructure Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Housing Development Sector",
-  },
-  {
-    name: "Project Study & Design Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Housing Development Sector",
-  },
-
-  // ==========================================================
-  // CORPORATE SERVICE SECTOR
-  // ==========================================================
-
-  {
-    name: "Legal Service Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Corporate Service Sector",
-  },
-  {
-    name: "ICT Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Corporate Service Sector",
-  },
-  {
-    name: "HR Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Corporate Service Sector",
-  },
-  {
-    name: "Finance Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Corporate Service Sector",
-  },
-  {
-    name: "Records & Archive Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Corporate Service Sector",
-  },
-
-  // ==========================================================
-  // HOUSES ADMINISTRATION SECTOR
-  // ==========================================================
-
-  {
-    name: "Customer Service Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Houses Administration Sector",
-  },
-  {
-    name: "Property Rental Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Houses Administration Sector",
-  },
-  {
-    name: "Maintenance Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Houses Administration Sector",
-  },
-  {
-    name: "Sales Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Houses Administration Sector",
-  },
-  {
-    name: "Branch Offices Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Houses Administration Sector",
-  },
-
-  // ==========================================================
-  // CONSTRUCTION INPUT SUPPLY SECTOR
-  // ==========================================================
-
-  {
-    name: "Machinery & Vehicle Maintenance Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Construction Input Supply Sector",
-  },
-  {
-    name: "Construction Input Products Directorate",
-    unitType: "DIRECTORATE" as const,
-    parentName: "Construction Input Supply Sector",
-  },
-
-  // ==========================================================
-  // PROTOTYPE GROUPS
-  // ==========================================================
-
-  {
-    name: "ICT Group A",
-    unitType: "GROUP" as const,
-    parentName: "ICT Directorate",
-  },
-  {
-    name: "ICT Group B",
-    unitType: "GROUP" as const,
-    parentName: "ICT Directorate",
-  },
-
-  {
-    name: "Group A",
-    unitType: "GROUP" as const,
-    parentName: "Project Monitoring Directorate",
-  },
-  {
-    name: "Group B",
-    unitType: "GROUP" as const,
-    parentName: "Land & Infrastructure Directorate",
-  },
-];
 
 // ============================================================
 // MAIN
@@ -927,99 +777,77 @@ async function main() {
     "\nRole → permission assignments completed successfully.\n",
   );
 
-  // ==========================================================
-  // 4. ENSURE ORGANIZATIONAL UNITS
-  // ==========================================================
 
-  console.log("Creating/updating organizational units...");
+  // ============================================================
+// BOOTSTRAP SYSTEM ADMIN
+// ============================================================
 
-  for (const unit of organizationalUnits) {
-    let parentUnitId: string | null = null;
+const bootstrapAdmin = {
+  name: "System Administrator",
+  email: "admin@fhc.gov.et",
+  password: "Admin@123",
+};  
 
-    // --------------------------------------------------------
-    // Find parent
-    // --------------------------------------------------------
 
-    if (unit.parentName) {
-      const parent = await prisma.organizationalUnit.findFirst({
-        where: {
-          name: unit.parentName,
-        },
-      });
+// ==========================================================
+// 4. ENSURE BOOTSTRAP SYSTEM ADMIN
+// ==========================================================
 
-      if (!parent) {
-        throw new Error(
-          `Parent organizational unit not found: ${unit.parentName}`,
-        );
-      }
+console.log("Creating/updating bootstrap System Admin...");
 
-      parentUnitId = parent.unitId;
-    }
+const systemAdminRole = await prisma.role.findUnique({
+  where: {
+    name: "SYSTEM_ADMIN",
+  },
+});
 
-    // --------------------------------------------------------
-    // Find existing unit
-    // --------------------------------------------------------
+if (!systemAdminRole) {
+  throw new Error("SYSTEM_ADMIN role not found.");
+}
 
-    const existingUnit =
-      await prisma.organizationalUnit.findFirst({
-        where: {
-          name: unit.name,
-          parentUnitId,
-        },
-      });
+const passwordHash = await argon2.hash(bootstrapAdmin.password);
 
-    // --------------------------------------------------------
-    // Update existing unit
-    // --------------------------------------------------------
+const adminUser = await prisma.user.upsert({
+  where: {
+    email: bootstrapAdmin.email,
+  },
+  update: {
+    name: bootstrapAdmin.name,
+    passwordHash,
+    isActive: true,
+    unitId: null,
+  },
+  create: {
+    name: bootstrapAdmin.name,
+    email: bootstrapAdmin.email,
+    passwordHash,
+    isActive: true,
+    unitId: null,
+  },
+});
 
-    if (existingUnit) {
-      await prisma.organizationalUnit.update({
-        where: {
-          unitId: existingUnit.unitId,
-        },
-        data: {
-          unitType: unit.unitType,
-          parentUnitId,
-          isActive: true,
-        },
-      });
+await prisma.userRole.upsert({
+  where: {
+    userId_roleId: {
+      userId: adminUser.userId,
+      roleId: systemAdminRole.roleId,
+    },
+  },
+  update: {},
+  create: {
+    userId: adminUser.userId,
+    roleId: systemAdminRole.roleId,
+  },
+});
 
-      console.log(
-        `Organizational unit updated: ${unit.name}`,
-      );
-    }
-
-    // --------------------------------------------------------
-    // Create new unit
-    // --------------------------------------------------------
-
-    else {
-      await prisma.organizationalUnit.create({
-        data: {
-          name: unit.name,
-          unitType: unit.unitType,
-          parentUnitId,
-          isActive: true,
-        },
-      });
-
-      console.log(
-        `Organizational unit created: ${unit.name}`,
-      );
-    }
-  }
-
-  console.log(
-    "\nOrganizational units ensured successfully.\n",
-  );
-
+console.log(`Bootstrap System Admin ensured: ${adminUser.email}`);
   // ==========================================================
   // FINAL SUMMARY
   // ==========================================================
 
   const permissionCount = await prisma.permission.count();
   const roleCount = await prisma.role.count();
-  const unitCount = await prisma.organizationalUnit.count();
+ // const unitCount = await prisma.organizationalUnit.count();
   const rolePermissionCount =
     await prisma.rolePermission.count();
 
@@ -1029,7 +857,7 @@ async function main() {
   console.log(`Permissions:       ${permissionCount}`);
   console.log(`Roles:             ${roleCount}`);
   console.log(`Role Permissions:  ${rolePermissionCount}`);
-  console.log(`Org Units:         ${unitCount}`);
+ // console.log(`Org Units:         ${unitCount}`);
   console.log("============================================================");
 }
 
