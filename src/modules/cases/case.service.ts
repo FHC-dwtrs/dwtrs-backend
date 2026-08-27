@@ -1,11 +1,11 @@
-import prisma from "../../config/database";
+import prisma from "../../config/database.js";
 import {
   CreateCaseInput,
   UpdateCaseInput,
-} from "./case.validation";
+} from "./case.validation.js";
 
-import { Prisma } from "../../generated/prisma/client";
-import { createCustomer, getCustomerByPhone, updateCustomer } from "../customers/customer.service";
+import { Prisma } from "../../generated/prisma/client.js";
+import { createCustomer, getCustomerByPhone, updateCustomer } from "../customers/customer.service.js";
 // ============================================================
 // GET ALL CASES
 // ============================================================

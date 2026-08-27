@@ -1,12 +1,12 @@
 import fs from "fs/promises";
 import crypto from "crypto";
 import path from "path";
-import { Prisma } from "../../generated/prisma/client";
-import prisma from "../../config/database";
+import { Prisma } from "../../generated/prisma/client.js";
+import prisma from "../../config/database.js";
 
 import {
   UpdateDocumentInput,
-} from "./document.validation";
+} from "./document.validation.js";
 
 interface CreateDocumentInput {
   caseId: string;

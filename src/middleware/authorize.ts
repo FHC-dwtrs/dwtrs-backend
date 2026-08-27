@@ -1,6 +1,6 @@
 import type { NextFunction, Response } from "express";
-import { AuthenticatedRequest } from "./auth.middleware";
-import prisma from "../config/database";
+import { AuthenticatedRequest } from "./auth.middleware.js";
+import prisma from "../config/database.js";
 
 export function authorize(permissionName: string) {
   return async (

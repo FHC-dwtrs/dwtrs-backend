@@ -1,20 +1,20 @@
 import type { Response } from "express";
 
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   getCases,
   getCaseById,
   createCase,
   updateCase,
-} from "./case.service";
+} from "./case.service.js";
 
 import {
   createCaseSchema,
   updateCaseSchema,
-} from "./case.validation";
+} from "./case.validation.js";
 
-import { serializeBigInt } from "../../utils/serializeBigInt";
+import { serializeBigInt } from "../../utils/serializeBigInt.js";
 
 // ============================================================
 // GET CASES

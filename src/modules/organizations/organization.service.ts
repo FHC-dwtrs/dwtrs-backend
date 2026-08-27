@@ -1,12 +1,12 @@
-import prisma from "../../config/database";
-import { createAuditLog } from "../audit/audit.service";
+import prisma from "../../config/database.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 import type {
   CreateOrganizationInput,
   UpdateOrganizationInput,
   UpdateOrganizationStatusInput,
   OrganizationQueryInput,
-} from "./organization.validation";
+} from "./organization.validation.js";
 
 const VALID_PARENT_TYPES: Record<
   string,

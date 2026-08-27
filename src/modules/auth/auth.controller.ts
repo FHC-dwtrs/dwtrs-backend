@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { loginUser } from "./auth.service";
-import { loginSchema } from "./auth.validation";
+import { loginUser } from "./auth.service.js";
+import { loginSchema } from "./auth.validation.js";
 
 export async function login(req: Request, res: Response) {
   try {

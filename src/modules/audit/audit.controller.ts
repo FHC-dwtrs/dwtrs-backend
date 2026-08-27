@@ -1,15 +1,15 @@
 import type { Response } from "express";
 
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   getAuditLogs,
   getAuditLogById,
-} from "./audit.service";
+} from "./audit.service.js";
 
 import {
   auditLogQuerySchema,
-} from "./audit.validation";
+} from "./audit.validation.js";
 
 // ============================================================
 // GET AUDIT LOGS

@@ -1,7 +1,7 @@
-import prisma from "../../config/database";
-import { Prisma } from "../../generated/prisma/client";
+import prisma from "../../config/database.js";
+import { Prisma } from "../../generated/prisma/client.js";
 
-import type { AuditLogQueryInput } from "./audit.validation";
+import type { AuditLogQueryInput } from "./audit.validation.js";
 
 // ============================================================
 // CREATE AUDIT LOG

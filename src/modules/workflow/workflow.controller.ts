@@ -1,6 +1,6 @@
 import type { Response } from "express";
 
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   assignCase,
@@ -8,7 +8,7 @@ import {
   returnCase,
   transferCase,
   reassignCase,
-} from "./workflow.service";
+} from "./workflow.service.js";
 
 import {
   assignCaseSchema,
@@ -16,7 +16,7 @@ import {
   returnCaseSchema,
   transferCaseSchema,
   reassignCaseSchema,
-} from "./workflow.validation";
+} from "./workflow.validation.js";
 
 // ============================================================
 // ASSIGN CASE CONTROLLER

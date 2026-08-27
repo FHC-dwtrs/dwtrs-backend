@@ -1,7 +1,7 @@
 import { Router } from "express";
 
-import { authenticate } from "../../middleware/auth.middleware";
-import { authorize } from "../../middleware/authorize";
+import { authenticate } from "../../middleware/auth.middleware.js";
+import { authorize } from "../../middleware/authorize.js";
 
 import {
   assignCaseController,
@@ -9,7 +9,7 @@ import {
   returnCaseController,
   transferCaseController,
   reassignCaseController,
-} from "./workflow.controller";
+} from "./workflow.controller.js";
 
 const router = Router();
 

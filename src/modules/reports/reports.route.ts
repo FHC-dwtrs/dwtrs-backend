@@ -1,7 +1,7 @@
 import { Router } from "express";
 
-import { authenticate } from "../../middleware/auth.middleware";
-import { authorize } from "../../middleware/authorize";
+import { authenticate } from "../../middleware/auth.middleware.js";
+import { authorize } from "../../middleware/authorize.js";
 
 import {
   caseSummaryController,
@@ -9,7 +9,7 @@ import {
   workflowReportController,
   pendingCasesController,
   periodStatisticsController,
-} from "./reports.controller";
+} from "./reports.controller.js";
 
 const router = Router();
 

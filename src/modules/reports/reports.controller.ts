@@ -1,6 +1,6 @@
 import type { Response } from "express";
 
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   getCaseSummary,
@@ -8,11 +8,11 @@ import {
   getWorkflowReport,
   getPendingCases,
   getPeriodStatistics,
-} from "./reports.service";
+} from "./reports.service.js";
 
 import {
   reportFilterSchema,
-} from "./reports.validation";
+} from "./reports.validation.js";
 
 // ============================================================
 // CASE SUMMARY

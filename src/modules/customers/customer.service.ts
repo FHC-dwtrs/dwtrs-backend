@@ -1,9 +1,9 @@
-import prisma from "../../config/database";
+import prisma from "../../config/database.js";
 import {
   CreateCustomerInput,
   UpdateCustomerInput,
-} from "./customer.validation";
-import { Prisma } from "../../generated/prisma/client";
+} from "./customer.validation.js";
+import { Prisma } from "../../generated/prisma/client.js";
 
 type PrismaClientLike =
   | typeof prisma

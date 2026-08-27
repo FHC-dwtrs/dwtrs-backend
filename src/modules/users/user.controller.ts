@@ -7,14 +7,14 @@ import {
   updateUser,
   updateUserStatus,
   assignUserUnit,
-} from "./user.service";
+} from "./user.service.js";
 
 import {
   createUserSchema,
   updateUserSchema,
   updateUserStatusSchema,
   assignUserUnitSchema,
-} from "./user.validation";
+} from "./user.validation.js";
 
 // ============================================================
 // CREATE USER

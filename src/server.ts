@@ -6,10 +6,11 @@ app.listen(PORT, () => {
   console.log(`DWTRS API running on http://localhost:${PORT}`);
 });*/
 import "dotenv/config";
-import app from "./app";
-import prisma from "./config/database";
+import app from "./app.js";
+import prisma from "./config/database.js";
 
-const PORT = 5000;
+
+const PORT = Number(process.env.PORT) || 5000;
 
 async function startServer() {
   try {

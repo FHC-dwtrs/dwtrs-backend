@@ -1,8 +1,8 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { Prisma } from "../../generated/prisma/client";
-import prisma from "../../config/database";
+import { Prisma } from "../../generated/prisma/client.js";
+import prisma from "../../config/database.js";
 
 interface CreateAttachmentInput {
   documentId: string;

@@ -1,8 +1,8 @@
-import prisma from "../../config/database";
+import prisma from "../../config/database.js";
 
 import type {
   ReportFilterInput,
-} from "./reports.validation";
+} from "./reports.validation.js";
 
 const CASE_STATUSES = [
   "SUBMITTED",

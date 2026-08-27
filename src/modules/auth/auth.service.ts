@@ -1,7 +1,7 @@
 import argon2 from "argon2";
 import jwt from "jsonwebtoken";
-import prisma from "../../config/database";
-import type { LoginInput } from "./auth.validation";
+import prisma from "../../config/database.js";
+import type { LoginInput } from "./auth.validation.js";
 
 export async function loginUser(input: LoginInput) {
   const user = await prisma.user.findUnique({

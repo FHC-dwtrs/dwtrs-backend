@@ -1,8 +1,8 @@
 import { Router } from "express";
 
-import { authenticate } from "../../middleware/auth.middleware";
-import { authorize } from "../../middleware/authorize";
-import { uploadDocument } from "../../config/upload";
+import { authenticate } from "../../middleware/auth.middleware.js";
+import { authorize } from "../../middleware/authorize.js";
+import { uploadDocument } from "../../config/upload.js";
 
 import {
   createDocumentController,
@@ -10,7 +10,7 @@ import {
   getDocumentController,
   getDocumentsByCaseController,
   updateDocumentController,
-} from "./document.controller";
+} from "./document.controller.js";
 
 import {
   createAttachmentController,
@@ -18,9 +18,9 @@ import {
   getAttachmentController,
   getAttachmentsByDocumentController,
   updateAttachmentController,
-} from "./attachment.controller";
+} from "./attachment.controller.js";
 
-import { requireRecordsArchive } from "../../middleware/requireRecordsArchive";
+import { requireRecordsArchive } from "../../middleware/requireRecordsArchive.js";
 
 const router = Router();
 

@@ -1,9 +1,9 @@
 import { Response } from "express";
 import multer from "multer";
 
-import { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
-import { createAttachment, deleteAttachment, getAttachmentFile, getAttachmentsByDocument, updateAttachment } from "./attachment.service";
+import { createAttachment, deleteAttachment, getAttachmentFile, getAttachmentsByDocument, updateAttachment } from "./attachment.service.js";
 
 export const createAttachmentController = async (
   req: AuthenticatedRequest,

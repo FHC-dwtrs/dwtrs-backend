@@ -1,7 +1,7 @@
 import { Router } from "express";
 
-import { authenticate } from "../../middleware/auth.middleware";
-import { authorize } from "../../middleware/authorize";
+import { authenticate } from "../../middleware/auth.middleware.js";
+import { authorize } from "../../middleware/authorize.js";
 
 import {
   createOrganizationController,
@@ -11,7 +11,7 @@ import {
   updateOrganizationStatusController,
   getOrganizationChildrenController,
   getOrganizationUsersController,
-} from "./organization.controller";
+} from "./organization.controller.js";
 
 const router = Router();
 

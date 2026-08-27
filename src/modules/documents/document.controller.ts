@@ -1,7 +1,7 @@
 import { Response } from "express";
 import multer from "multer";
 
-import { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   createDocument,
@@ -9,12 +9,12 @@ import {
   getDocumentFile,
   getDocumentsByCase,
   updateDocument,
-} from "./document.service";
+} from "./document.service.js";
 
 import {
   createDocumentSchema,
   updateDocumentSchema,
-} from "./document.validation";
+} from "./document.validation.js";
 
 // ============================================================
 // CREATE / UPLOAD DOCUMENT

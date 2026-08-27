@@ -1,5 +1,5 @@
-import prisma from "../../config/database";
-import { Prisma } from "../../generated/prisma/client";
+import prisma from "../../config/database.js";
+import { Prisma } from "../../generated/prisma/client.js";
 
 // ============================================================
 // TYPES

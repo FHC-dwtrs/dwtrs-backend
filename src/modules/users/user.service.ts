@@ -1,13 +1,13 @@
 import argon2 from "argon2";
 
-import prisma from "../../config/database";
+import prisma from "../../config/database.js";
 
 import type {
   CreateUserInput,
   UpdateUserInput,
   UpdateUserStatusInput,
   AssignUserUnitInput,
-} from "./user.validation";
+} from "./user.validation.js";
 
 // ============================================================
 // USER SELECT

@@ -1,13 +1,13 @@
 import type { Response } from "express";
 
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   getUserNotifications,
   getUnreadNotificationCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
-} from "./notification.service";
+} from "./notification.service.js";
 
 // ============================================================
 // GET USER NOTIFICATIONS

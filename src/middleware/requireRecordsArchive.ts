@@ -1,6 +1,6 @@
 import { NextFunction, Response } from "express";
-import { AuthenticatedRequest } from "./auth.middleware";
-import prisma from "../config/database";
+import { AuthenticatedRequest } from "./auth.middleware.js";
+import prisma from "../config/database.js";
 
 
 export const requireRecordsArchive = async (

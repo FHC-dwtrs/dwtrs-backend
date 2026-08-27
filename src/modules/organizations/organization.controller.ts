@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import prisma from "../../config/database";
-import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
+import prisma from "../../config/database.js";
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 import {
   createOrganization,
@@ -10,14 +10,14 @@ import {
   updateOrganizationStatus,
   getOrganizationChildren,
   getOrganizationUsers,
-} from "./organization.service";
+} from "./organization.service.js";
 
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
   updateOrganizationStatusSchema,
   organizationQuerySchema,
-} from "./organization.validation";
+} from "./organization.validation.js";
 
 // ============================================================
 // CREATE

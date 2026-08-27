@@ -1,7 +1,7 @@
-import prisma from "../../config/database";
-import { Prisma } from "../../generated/prisma/client";
-import { createAuditLog } from "../audit/audit.service";
-import { notifyUnitUsers } from "../notifications/notification.service";
+import prisma from "../../config/database.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import { createAuditLog } from "../audit/audit.service.js";
+import { notifyUnitUsers } from "../notifications/notification.service.js";
 
 import type {
   AssignCaseInput,
@@ -9,7 +9,7 @@ import type {
   ReassignCaseInput,
   ReturnCaseInput,
   TransferCaseInput,
-} from "./workflow.validation";
+} from "./workflow.validation.js";
 
 // ============================================================
 // CONSTANT

@@ -6,11 +6,11 @@ import {
   createCustomer,
   updateCustomer,
   searchCustomers,
-} from "./customer.service";
+} from "./customer.service.js";
 import {
   createCustomerSchema,
   updateCustomerSchema,
-} from "./customer.validation";
+} from "./customer.validation.js";
 
 // ============================================================
 // GET ALL CUSTOMERS
