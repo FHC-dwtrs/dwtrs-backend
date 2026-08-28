@@ -1,27 +1,6 @@
 import multer from "multer";
-import path from "path";
-import fs from "fs";
-import crypto from "crypto";
 
-const uploadDirectory = path.join(process.cwd(), "uploads");
-
-if (!fs.existsSync(uploadDirectory)) {
-  fs.mkdirSync(uploadDirectory, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDirectory);
-  },
-
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname);
-
-    const uniqueName = `${Date.now()}-${crypto.randomUUID()}${extension}`;
-
-    cb(null, uniqueName);
-  },
-});
+const storage = multer.memoryStorage();
 
 const allowedMimeTypes = [
   "application/pdf",
@@ -38,7 +17,9 @@ const fileFilter: multer.Options["fileFilter"] = (
     cb(null, true);
   } else {
     cb(
-      new Error("Only PDF, JPEG, and PNG files are allowed."),
+      new Error(
+        "Only PDF, JPEG, and PNG files are allowed.",
+      ),
     );
   }
 };

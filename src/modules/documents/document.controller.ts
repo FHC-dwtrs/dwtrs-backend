@@ -42,8 +42,7 @@ export const createDocumentController = async (
         success: false,
         message: "Invalid document information",
         errors:
-          validationResult.error.flatten()
-            .fieldErrors,
+          validationResult.error.flatten().fieldErrors,
       });
     }
 
@@ -76,37 +75,22 @@ export const createDocumentController = async (
       success: true,
       message: "Document uploaded successfully",
       data: {
-        documentId:
-          document.documentId,
+        documentId: document.documentId,
         caseId: document.caseId,
-        documentType:
-          document.documentType,
+        documentType: document.documentType,
         title: document.title,
-        fileName:
-          document.fileName,
-        storageKey:
-          document.storageKey,
-        mimeType:
-          document.mimeType,
-        fileSize:
-          document.fileSize.toString(),
-        checksum:
-          document.checksum,
+        fileName: document.fileName,
+        storageKey: document.storageKey,
+        mimeType: document.mimeType,
+        fileSize: document.fileSize.toString(),
+        checksum: document.checksum,
       },
     });
   } catch (error) {
-    console.error(
-      "Create document error:",
-      error,
-    );
+    console.error("Create document error:", error);
 
-    if (
-      error instanceof multer.MulterError
-    ) {
-      if (
-        error.code ===
-        "LIMIT_FILE_SIZE"
-      ) {
+    if (error instanceof multer.MulterError) {
+      if (error.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
           success: false,
           message:
@@ -116,7 +100,8 @@ export const createDocumentController = async (
 
       return res.status(400).json({
         success: false,
-        message: `File upload error: ${error.message}`,
+        message:
+          `File upload error: ${error.message}`,
       });
     }
 
@@ -158,8 +143,7 @@ export const getDocumentsByCaseController =
     res: Response,
   ) => {
     try {
-      const caseId =
-        req.params.caseId;
+      const caseId = req.params.caseId;
 
       if (typeof caseId !== "string") {
         return res.status(400).json({
@@ -175,14 +159,11 @@ export const getDocumentsByCaseController =
         success: true,
         message:
           "Documents retrieved successfully",
-
-        data: documents.map(
-          (document) => ({
-            ...document,
-            fileSize:
-              document.fileSize.toString(),
-          }),
-        ),
+        data: documents.map((document) => ({
+          ...document,
+          fileSize:
+            document.fileSize.toString(),
+        })),
       });
     } catch (error) {
       console.error(
@@ -192,8 +173,7 @@ export const getDocumentsByCaseController =
 
       if (
         error instanceof Error &&
-        error.message ===
-          "Case not found"
+        error.message === "Case not found"
       ) {
         return res.status(404).json({
           success: false,
@@ -218,10 +198,7 @@ export const getDocumentController = async (
   res: Response,
 ) => {
   try {
-    const {
-      caseId,
-      documentId,
-    } = req.params;
+    const { caseId, documentId } = req.params;
 
     if (
       typeof caseId !== "string" ||
@@ -236,11 +213,15 @@ export const getDocumentController = async (
 
     const {
       document,
-      filePath,
+      fileBuffer,
     } = await getDocumentFile(
       caseId,
       documentId,
     );
+
+    // ----------------------------------------------------------
+    // SET RESPONSE HEADERS BEFORE SENDING FILE
+    // ----------------------------------------------------------
 
     res.setHeader(
       "Content-Type",
@@ -254,7 +235,16 @@ export const getDocumentController = async (
       )}"`,
     );
 
-    return res.sendFile(filePath);
+    res.setHeader(
+      "Content-Length",
+      fileBuffer.length.toString(),
+    );
+
+    // ----------------------------------------------------------
+    // SEND FILE
+    // ----------------------------------------------------------
+
+    return res.send(fileBuffer);
   } catch (error) {
     console.error(
       "Get document error:",
@@ -263,8 +253,7 @@ export const getDocumentController = async (
 
     if (
       error instanceof Error &&
-      error.message ===
-        "Document not found"
+      error.message === "Document not found"
     ) {
       return res.status(404).json({
         success: false,
@@ -341,8 +330,7 @@ export const updateDocumentController =
         });
       }
 
-      const userId =
-        req.user?.sub;
+      const userId = req.user?.sub;
 
       if (!userId) {
         return res.status(401).json({
@@ -364,22 +352,17 @@ export const updateDocumentController =
         success: true,
         message:
           "Document updated successfully",
-
         data: {
           documentId:
             document.documentId,
-          caseId:
-            document.caseId,
+          caseId: document.caseId,
           documentType:
             document.documentType,
-          title:
-            document.title,
-          fileName:
-            document.fileName,
+          title: document.title,
+          fileName: document.fileName,
           storageKey:
             document.storageKey,
-          mimeType:
-            document.mimeType,
+          mimeType: document.mimeType,
           fileSize:
             document.fileSize.toString(),
           checksum:
@@ -475,8 +458,8 @@ export const deleteDocumentController =
       }
 
       const deletionReason =
-        typeof req.body
-          .deletionReason === "string"
+        typeof req.body.deletionReason ===
+        "string"
           ? req.body.deletionReason.trim()
           : "";
 
@@ -498,8 +481,7 @@ export const deleteDocumentController =
         });
       }
 
-      const userId =
-        req.user?.sub;
+      const userId = req.user?.sub;
 
       if (!userId) {
         return res.status(401).json({

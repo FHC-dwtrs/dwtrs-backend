@@ -1,12 +1,21 @@
-import fs from "fs/promises";
 import crypto from "crypto";
-import path from "path";
+import {
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+
 import { Prisma } from "../../generated/prisma/client.js";
 import prisma from "../../config/database.js";
+import storageClient from "../../config/storage.js";
 
 import {
   UpdateDocumentInput,
 } from "./document.validation.js";
+
+import {
+  uploadToStorage,
+  deleteFromStorage,
+  generateStorageKey,
+} from "../../utils/storage.js";
 
 interface CreateDocumentInput {
   caseId: string;
@@ -16,18 +25,19 @@ interface CreateDocumentInput {
   uploadedBy: string;
 }
 
+const bucket =
+  process.env.SUPABASE_S3_BUCKET!;
+
 // ============================================================
 // CHECKSUM
 // ============================================================
 
-const calculateChecksum = async (
-  filePath: string,
-): Promise<string> => {
-  const fileBuffer = await fs.readFile(filePath);
-
+const calculateChecksum = (
+  buffer: Buffer,
+): string => {
   return crypto
     .createHash("sha256")
-    .update(fileBuffer)
+    .update(buffer)
     .digest("hex");
 };
 
@@ -46,83 +56,121 @@ export const createDocument = async (
     uploadedBy,
   } = input;
 
-  const existingCase = await prisma.case.findUnique({
-    where: {
-      caseId,
-    },
-  });
+  const existingCase =
+    await prisma.case.findUnique({
+      where: {
+        caseId,
+      },
+    });
 
   if (!existingCase) {
     throw new Error("Case not found");
   }
 
   if (!file) {
-    throw new Error("Document file is required");
+    throw new Error(
+      "Document file is required",
+    );
   }
 
-  const checksum = await calculateChecksum(
-    file.path,
-  );
+  const checksum =
+    calculateChecksum(file.buffer);
+
+  const storageKey =
+    generateStorageKey(
+      "documents",
+      file.originalname,
+    );
 
   try {
-    const document = await prisma.$transaction(
-      async (tx) => {
-        const createdDocument =
-          await tx.document.create({
+    // --------------------------------------------------------
+    // 1. UPLOAD TO SUPABASE
+    // --------------------------------------------------------
+
+    await uploadToStorage(
+      file.buffer,
+      storageKey,
+      file.mimetype,
+    );
+
+    // --------------------------------------------------------
+    // 2. CREATE DATABASE RECORD + AUDIT
+    // --------------------------------------------------------
+
+    const document =
+      await prisma.$transaction(
+        async (tx) => {
+          const createdDocument =
+            await tx.document.create({
+              data: {
+                caseId,
+                documentType,
+                title,
+
+                fileName:
+                  file.originalname,
+                storageKey,
+                mimeType:
+                  file.mimetype,
+                fileSize:
+                  BigInt(file.size),
+                checksum,
+
+                uploadedBy,
+              },
+            });
+
+          await tx.auditLog.create({
             data: {
+              userId: uploadedBy,
               caseId,
-              documentType,
-              title,
 
-              fileName: file.originalname,
-              storageKey: file.path,
-              mimeType: file.mimetype,
-              fileSize: BigInt(file.size),
-              checksum,
+              action:
+                "DOCUMENT_CREATE",
+              entityType:
+                "DOCUMENT",
+              entityId:
+                createdDocument.documentId,
 
-              uploadedBy,
+              oldValues:
+                Prisma.JsonNull,
+
+              newValues: {
+                documentId:
+                  createdDocument.documentId,
+                caseId,
+                documentType,
+                title,
+                fileName:
+                  file.originalname,
+                storageKey,
+                mimeType:
+                  file.mimetype,
+                fileSize:
+                  file.size,
+                checksum,
+                uploadedBy,
+              },
             },
           });
 
-        await tx.auditLog.create({
-          data: {
-            userId: uploadedBy,
-            caseId,
-
-            action: "DOCUMENT_CREATE",
-            entityType: "DOCUMENT",
-            entityId:
-              createdDocument.documentId,
-
-            oldValues: Prisma.JsonNull,
-
-            newValues: {
-              documentId:
-                createdDocument.documentId,
-              caseId,
-              documentType,
-              title,
-              fileName: file.originalname,
-              storageKey: file.path,
-              mimeType: file.mimetype,
-              fileSize: file.size,
-              checksum,
-              uploadedBy,
-            },
-          },
-        });
-
-        return createdDocument;
-      },
-    );
+          return createdDocument;
+        },
+      );
 
     return document;
   } catch (error) {
+    // --------------------------------------------------------
+    // DATABASE FAILED → REMOVE FILE FROM SUPABASE
+    // --------------------------------------------------------
+
     try {
-      await fs.unlink(file.path);
+      await deleteFromStorage(
+        storageKey,
+      );
     } catch (cleanupError) {
       console.error(
-        "Failed to remove uploaded file after database error:",
+        "Failed to remove uploaded document from storage:",
         cleanupError,
       );
     }
@@ -138,11 +186,12 @@ export const createDocument = async (
 export const getDocumentsByCase = async (
   caseId: string,
 ) => {
-  const existingCase = await prisma.case.findUnique({
-    where: {
-      caseId,
-    },
-  });
+  const existingCase =
+    await prisma.case.findUnique({
+      where: {
+        caseId,
+      },
+    });
 
   if (!existingCase) {
     throw new Error("Case not found");
@@ -192,25 +241,45 @@ export const getDocumentFile = async (
     });
 
   if (!document) {
-    throw new Error("Document not found");
+    throw new Error(
+      "Document not found",
+    );
   }
 
-  const filePath = path.resolve(
-    document.storageKey,
-  );
-
   try {
-    await fs.access(filePath);
-  } catch {
+    const result =
+      await storageClient.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: document.storageKey,
+        }),
+      );
+
+    if (!result.Body) {
+      throw new Error(
+        "Document file not found",
+      );
+    }
+
+    const fileBuffer =
+      Buffer.from(
+        await result.Body.transformToByteArray(),
+      );
+
+    return {
+      document,
+      fileBuffer,
+    };
+  } catch (error) {
+    console.error(
+      "Failed to retrieve document from storage:",
+      error,
+    );
+
     throw new Error(
       "Document file not found",
     );
   }
-
-  return {
-    document,
-    filePath,
-  };
 };
 
 // ============================================================
@@ -240,30 +309,62 @@ export const updateDocument = async (
     });
 
   if (!document) {
-    throw new Error("Document not found");
+    throw new Error(
+      "Document not found",
+    );
   }
 
   // ----------------------------------------------------------
   // 2. PREPARE FILE INFORMATION
   // ----------------------------------------------------------
 
-  let checksum: string | null =
+  let checksum:
+    | string
+    | null =
     document.checksum;
 
-  let newStorageKey = document.storageKey;
-  let newFileName = document.fileName;
-  let newMimeType = document.mimeType;
-  let newFileSize = document.fileSize;
+  let newStorageKey =
+    document.storageKey;
+
+  let newFileName =
+    document.fileName;
+
+  let newMimeType =
+    document.mimeType;
+
+  let newFileSize =
+    document.fileSize;
 
   if (file) {
-    checksum = await calculateChecksum(
-      file.path,
-    );
+    checksum =
+      calculateChecksum(
+        file.buffer,
+      );
 
-    newStorageKey = file.path;
-    newFileName = file.originalname;
-    newMimeType = file.mimetype;
-    newFileSize = BigInt(file.size);
+    newStorageKey =
+      generateStorageKey(
+        "documents",
+        file.originalname,
+      );
+
+    newFileName =
+      file.originalname;
+
+    newMimeType =
+      file.mimetype;
+
+    newFileSize =
+      BigInt(file.size);
+
+    // --------------------------------------------------------
+    // Upload replacement BEFORE database update
+    // --------------------------------------------------------
+
+    await uploadToStorage(
+      file.buffer,
+      newStorageKey,
+      file.mimetype,
+    );
   }
 
   // ----------------------------------------------------------
@@ -271,16 +372,26 @@ export const updateDocument = async (
   // ----------------------------------------------------------
 
   const oldValues = {
-    documentId: document.documentId,
-    caseId: document.caseId,
-    documentType: document.documentType,
-    title: document.title,
-    fileName: document.fileName,
-    storageKey: document.storageKey,
-    mimeType: document.mimeType,
-    fileSize: document.fileSize.toString(),
-    checksum: document.checksum,
-    uploadedBy: document.uploadedBy,
+    documentId:
+      document.documentId,
+    caseId:
+      document.caseId,
+    documentType:
+      document.documentType,
+    title:
+      document.title,
+    fileName:
+      document.fileName,
+    storageKey:
+      document.storageKey,
+    mimeType:
+      document.mimeType,
+    fileSize:
+      document.fileSize.toString(),
+    checksum:
+      document.checksum,
+    uploadedBy:
+      document.uploadedBy,
   };
 
   try {
@@ -300,33 +411,39 @@ export const updateDocument = async (
                     input.documentType,
                 }),
 
-                ...(input.title !== undefined && {
-                  title: input.title,
+                ...(input.title !==
+                  undefined && {
+                  title:
+                    input.title,
                 }),
 
                 ...(file && {
-                  storageKey: newStorageKey,
-                  fileName: newFileName,
-                  mimeType: newMimeType,
-                  fileSize: newFileSize,
+                  storageKey:
+                    newStorageKey,
+                  fileName:
+                    newFileName,
+                  mimeType:
+                    newMimeType,
+                  fileSize:
+                    newFileSize,
                   checksum,
-                  uploadedBy: updatedBy,
+                  uploadedBy:
+                    updatedBy,
                 }),
               },
             });
-
-          // ------------------------------------------------
-          // AUDIT
-          // ------------------------------------------------
 
           await tx.auditLog.create({
             data: {
               userId: updatedBy,
               caseId,
 
-              action: "DOCUMENT_UPDATE",
-              entityType: "DOCUMENT",
-              entityId: documentId,
+              action:
+                "DOCUMENT_UPDATE",
+              entityType:
+                "DOCUMENT",
+              entityId:
+                documentId,
 
               oldValues,
 
@@ -337,7 +454,8 @@ export const updateDocument = async (
                   updated.caseId,
                 documentType:
                   updated.documentType,
-                title: updated.title,
+                title:
+                  updated.title,
                 fileName:
                   updated.fileName,
                 storageKey:
@@ -359,7 +477,7 @@ export const updateDocument = async (
       );
 
     // --------------------------------------------------------
-    // REMOVE OLD PHYSICAL FILE ONLY AFTER DB SUCCESS
+    // DATABASE SUCCESS → REMOVE OLD STORAGE OBJECT
     // --------------------------------------------------------
 
     if (
@@ -368,12 +486,12 @@ export const updateDocument = async (
         updatedDocument.storageKey
     ) {
       try {
-        await fs.unlink(
-          path.resolve(document.storageKey),
+        await deleteFromStorage(
+          document.storageKey,
         );
       } catch (cleanupError) {
         console.error(
-          "Failed to remove old document file:",
+          "Failed to remove old document from storage:",
           cleanupError,
         );
       }
@@ -381,13 +499,18 @@ export const updateDocument = async (
 
     return updatedDocument;
   } catch (error) {
-    // Database failed → remove NEW uploaded file.
+    // --------------------------------------------------------
+    // DATABASE FAILED → REMOVE NEW STORAGE OBJECT
+    // --------------------------------------------------------
+
     if (file) {
       try {
-        await fs.unlink(file.path);
+        await deleteFromStorage(
+          newStorageKey,
+        );
       } catch (cleanupError) {
         console.error(
-          "Failed to remove replacement file after database error:",
+          "Failed to remove replacement document from storage:",
           cleanupError,
         );
       }
@@ -416,74 +539,85 @@ export const deleteDocument = async (
     });
 
   if (!document) {
-    throw new Error("Document not found");
+    throw new Error(
+      "Document not found",
+    );
   }
 
   if (document.deletedAt) {
-    throw new Error("Document already deleted");
+    throw new Error(
+      "Document already deleted",
+    );
   }
 
-  const deletedAt = new Date();
+  const deletedAt =
+    new Date();
 
-  const result = await prisma.$transaction(
-    async (tx) => {
-      const deletedDocument =
-        await tx.document.update({
-          where: {
-            documentId,
-          },
+  const result =
+    await prisma.$transaction(
+      async (tx) => {
+        const deletedDocument =
+          await tx.document.update({
+            where: {
+              documentId,
+            },
 
+            data: {
+              deletedAt,
+              deletedBy,
+              deletionReason,
+            },
+          });
+
+        await tx.auditLog.create({
           data: {
-            deletedAt,
-            deletedBy,
-            deletionReason,
+            userId: deletedBy,
+            caseId,
+
+            action:
+              "DOCUMENT_DELETE",
+            entityType:
+              "DOCUMENT",
+            entityId:
+              documentId,
+
+            oldValues: {
+              documentId:
+                document.documentId,
+              caseId:
+                document.caseId,
+              documentType:
+                document.documentType,
+              title:
+                document.title,
+              fileName:
+                document.fileName,
+              storageKey:
+                document.storageKey,
+              mimeType:
+                document.mimeType,
+              fileSize:
+                document.fileSize.toString(),
+              checksum:
+                document.checksum,
+              uploadedBy:
+                document.uploadedBy,
+              createdAt:
+                document.createdAt.toISOString(),
+            },
+
+            newValues: {
+              deletedAt:
+                deletedAt.toISOString(),
+              deletedBy,
+              deletionReason,
+            },
           },
         });
 
-      await tx.auditLog.create({
-        data: {
-          userId: deletedBy,
-          caseId,
-
-          action: "DOCUMENT_DELETE",
-          entityType: "DOCUMENT",
-          entityId: documentId,
-
-          oldValues: {
-            documentId:
-              document.documentId,
-            caseId: document.caseId,
-            documentType:
-              document.documentType,
-            title: document.title,
-            fileName:
-              document.fileName,
-            storageKey:
-              document.storageKey,
-            mimeType:
-              document.mimeType,
-            fileSize:
-              document.fileSize.toString(),
-            checksum:
-              document.checksum,
-            uploadedBy:
-              document.uploadedBy,
-            createdAt:
-              document.createdAt.toISOString(),
-          },
-
-          newValues: {
-            deletedAt:
-              deletedAt.toISOString(),
-            deletedBy,
-            deletionReason,
-          },
-        },
-      });
-
-      return deletedDocument;
-    },
-  );
+        return deletedDocument;
+      },
+    );
 
   return result;
 };

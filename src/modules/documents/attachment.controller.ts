@@ -242,13 +242,12 @@ export const getAttachmentController = async (
       // ----------------------------------------------------------
       // 2. Get attachment file
       // ----------------------------------------------------------
-  
-      const { attachment, filePath } =
-        await getAttachmentFile(
-          caseId,
-          documentId,
-          attachmentId,
-        );
+      const { attachment, fileBuffer } =
+  await getAttachmentFile(
+    caseId,
+    documentId,
+    attachmentId,
+  );
   
       // ----------------------------------------------------------
       // 3. Set response headers
@@ -270,7 +269,7 @@ export const getAttachmentController = async (
       // 4. Send file
       // ----------------------------------------------------------
   
-      return res.sendFile(filePath);
+      return res.send(fileBuffer);
     } catch (error) {
       console.error("Get attachment error:", error);
   

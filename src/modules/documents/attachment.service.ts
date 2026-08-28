@@ -1,8 +1,17 @@
 import crypto from "crypto";
-import fs from "fs/promises";
-import path from "path";
+import {
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+
 import { Prisma } from "../../generated/prisma/client.js";
 import prisma from "../../config/database.js";
+import storageClient from "../../config/storage.js";
+
+import {
+  uploadToStorage,
+  deleteFromStorage,
+  generateStorageKey,
+} from "../../utils/storage.js";
 
 interface CreateAttachmentInput {
   documentId: string;
@@ -10,20 +19,19 @@ interface CreateAttachmentInput {
   uploadedBy: string;
 }
 
+const bucket =
+  process.env.SUPABASE_S3_BUCKET!;
+
 // ============================================================
 // CHECKSUM
 // ============================================================
 
-const calculateChecksum = async (
-  filePath: string,
-): Promise<string> => {
-  const fileBuffer = await fs.readFile(
-    filePath,
-  );
-
+const calculateChecksum = (
+  buffer: Buffer,
+): string => {
   return crypto
     .createHash("sha256")
-    .update(fileBuffer)
+    .update(buffer)
     .digest("hex");
 };
 
@@ -64,9 +72,29 @@ export const createAttachment = async (
   }
 
   const checksum =
-    await calculateChecksum(file.path);
+    calculateChecksum(file.buffer);
+
+  const storageKey =
+    generateStorageKey(
+      "attachments",
+      file.originalname,
+    );
 
   try {
+    // --------------------------------------------------------
+    // 1. UPLOAD TO SUPABASE STORAGE
+    // --------------------------------------------------------
+
+    await uploadToStorage(
+      file.buffer,
+      storageKey,
+      file.mimetype,
+    );
+
+    // --------------------------------------------------------
+    // 2. CREATE DATABASE RECORD + AUDIT
+    // --------------------------------------------------------
+
     const attachment =
       await prisma.$transaction(
         async (tx) => {
@@ -77,12 +105,15 @@ export const createAttachment = async (
 
                 fileName:
                   file.originalname,
-                storageKey:
-                  file.path,
+
+                storageKey,
+
                 mimeType:
                   file.mimetype,
+
                 fileSize:
                   BigInt(file.size),
+
                 checksum,
 
                 uploadedBy,
@@ -97,26 +128,35 @@ export const createAttachment = async (
 
               action:
                 "ATTACHMENT_CREATE",
+
               entityType:
                 "ATTACHMENT",
+
               entityId:
                 created.attachmentId,
 
-              oldValues: Prisma.JsonNull,
+              oldValues:
+                Prisma.JsonNull,
 
               newValues: {
                 attachmentId:
                   created.attachmentId,
+
                 documentId,
+
                 fileName:
                   file.originalname,
-                storageKey:
-                  file.path,
+
+                storageKey,
+
                 mimeType:
                   file.mimetype,
+
                 fileSize:
                   file.size,
+
                 checksum,
+
                 uploadedBy,
               },
             },
@@ -128,11 +168,17 @@ export const createAttachment = async (
 
     return attachment;
   } catch (error) {
+    // --------------------------------------------------------
+    // DATABASE FAILED → REMOVE FILE FROM SUPABASE
+    // --------------------------------------------------------
+
     try {
-      await fs.unlink(file.path);
+      await deleteFromStorage(
+        storageKey,
+      );
     } catch (cleanupError) {
       console.error(
-        "Failed to remove uploaded attachment after database error:",
+        "Failed to remove uploaded attachment from storage:",
         cleanupError,
       );
     }
@@ -170,22 +216,40 @@ export const getAttachmentFile = async (
     );
   }
 
-  const filePath = path.resolve(
-    attachment.storageKey,
-  );
-
   try {
-    await fs.access(filePath);
-  } catch {
+    const result =
+      await storageClient.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: attachment.storageKey,
+        }),
+      );
+
+    if (!result.Body) {
+      throw new Error(
+        "Attachment file not found",
+      );
+    }
+
+    const fileBuffer =
+      Buffer.from(
+        await result.Body.transformToByteArray(),
+      );
+
+    return {
+      attachment,
+      fileBuffer,
+    };
+  } catch (error) {
+    console.error(
+      "Failed to retrieve attachment from storage:",
+      error,
+    );
+
     throw new Error(
       "Attachment file not found",
     );
   }
-
-  return {
-    attachment,
-    filePath,
-  };
 };
 
 // ============================================================
@@ -283,34 +347,65 @@ export const updateAttachment =
     }
 
     // --------------------------------------------------------
-    // 2. NEW FILE DATA
+    // 2. PREPARE NEW FILE
     // --------------------------------------------------------
 
     const checksum =
-      await calculateChecksum(
-        file.path,
+      calculateChecksum(
+        file.buffer,
       );
+
+    const newStorageKey =
+      generateStorageKey(
+        "attachments",
+        file.originalname,
+      );
+
+    // --------------------------------------------------------
+    // 3. OLD VALUES FOR AUDIT
+    // --------------------------------------------------------
 
     const oldValues = {
       attachmentId:
         attachment.attachmentId,
+
       documentId:
         attachment.documentId,
+
       fileName:
         attachment.fileName,
+
       storageKey:
         attachment.storageKey,
+
       mimeType:
         attachment.mimeType,
+
       fileSize:
         attachment.fileSize.toString(),
+
       checksum:
         attachment.checksum,
+
       uploadedBy:
         attachment.uploadedBy,
     };
 
     try {
+      // ------------------------------------------------------
+      // 4. UPLOAD NEW FILE FIRST
+      // ------------------------------------------------------
+
+      await uploadToStorage(
+        file.buffer,
+        newStorageKey,
+        file.mimetype,
+      );
+
+      // ------------------------------------------------------
+      // 5. UPDATE DATABASE + AUDIT
+      // ------------------------------------------------------
+
       const updated =
         await prisma.$transaction(
           async (tx) => {
@@ -323,24 +418,25 @@ export const updateAttachment =
                 data: {
                   fileName:
                     file.originalname,
+
                   storageKey:
-                    file.path,
+                    newStorageKey,
+
                   mimeType:
                     file.mimetype,
+
                   fileSize:
                     BigInt(file.size),
+
                   checksum,
 
                   uploadedBy:
                     updatedBy,
+
                   uploadedAt:
                     new Date(),
                 },
               });
-
-            // ------------------------------------------------
-            // AUDIT
-            // ------------------------------------------------
 
             await tx.auditLog.create({
               data: {
@@ -349,8 +445,10 @@ export const updateAttachment =
 
                 action:
                   "ATTACHMENT_UPDATE",
+
                 entityType:
                   "ATTACHMENT",
+
                 entityId:
                   attachmentId,
 
@@ -359,18 +457,25 @@ export const updateAttachment =
                 newValues: {
                   attachmentId:
                     result.attachmentId,
+
                   documentId:
                     result.documentId,
+
                   fileName:
                     result.fileName,
+
                   storageKey:
                     result.storageKey,
+
                   mimeType:
                     result.mimeType,
+
                   fileSize:
                     result.fileSize.toString(),
+
                   checksum:
                     result.checksum,
+
                   uploadedBy:
                     result.uploadedBy,
                 },
@@ -382,30 +487,33 @@ export const updateAttachment =
         );
 
       // ------------------------------------------------------
-      // REMOVE OLD PHYSICAL FILE
+      // 6. DATABASE SUCCESS → DELETE OLD FILE
       // ------------------------------------------------------
 
       try {
-        await fs.unlink(
-          path.resolve(
-            attachment.storageKey,
-          ),
+        await deleteFromStorage(
+          attachment.storageKey,
         );
       } catch (cleanupError) {
         console.error(
-          "Failed to remove old attachment file:",
+          "Failed to remove old attachment from storage:",
           cleanupError,
         );
       }
 
       return updated;
     } catch (error) {
-      // DB failed → remove replacement file.
+      // ------------------------------------------------------
+      // FAILED → DELETE NEW FILE
+      // ------------------------------------------------------
+
       try {
-        await fs.unlink(file.path);
+        await deleteFromStorage(
+          newStorageKey,
+        );
       } catch (cleanupError) {
         console.error(
-          "Failed to remove replacement attachment after database error:",
+          "Failed to remove replacement attachment from storage:",
           cleanupError,
         );
       }
@@ -450,7 +558,8 @@ export const deleteAttachment =
       );
     }
 
-    const deletedAt = new Date();
+    const deletedAt =
+      new Date();
 
     const deletedAttachment =
       await prisma.$transaction(
@@ -468,10 +577,6 @@ export const deleteAttachment =
               },
             });
 
-          // ------------------------------------------------
-          // AUDIT
-          // ------------------------------------------------
-
           await tx.auditLog.create({
             data: {
               userId: deletedBy,
@@ -479,26 +584,35 @@ export const deleteAttachment =
 
               action:
                 "ATTACHMENT_DELETE",
+
               entityType:
                 "ATTACHMENT",
+
               entityId:
                 attachmentId,
 
               oldValues: {
                 attachmentId:
                   attachment.attachmentId,
+
                 documentId:
                   attachment.documentId,
+
                 fileName:
                   attachment.fileName,
+
                 storageKey:
                   attachment.storageKey,
+
                 mimeType:
                   attachment.mimeType,
+
                 fileSize:
                   attachment.fileSize.toString(),
+
                 checksum:
                   attachment.checksum,
+
                 uploadedBy:
                   attachment.uploadedBy,
               },
@@ -506,7 +620,9 @@ export const deleteAttachment =
               newValues: {
                 deletedAt:
                   deletedAt.toISOString(),
+
                 deletedBy,
+
                 deletionReason,
               },
             },
