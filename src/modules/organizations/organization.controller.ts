@@ -35,10 +35,9 @@ export async function createOrganizationController(
       });
     }
 
-    const parsed =
-      createOrganizationSchema.safeParse(
-        req.body,
-      );
+    const parsed = createOrganizationSchema.safeParse(
+      req.body,
+    );
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -48,16 +47,14 @@ export async function createOrganizationController(
       });
     }
 
-    const result =
-      await createOrganization(
-        req.user.sub,
-        parsed.data,
-      );
+    const result = await createOrganization(
+      req.user.sub,
+      parsed.data,
+    );
 
     return res.status(201).json({
       success: true,
-      message:
-        "Organizational unit created successfully.",
+      message: "Organizational unit created successfully.",
       data: result,
     });
   } catch (error) {
@@ -79,9 +76,7 @@ export async function createOrganizationController(
 
       if (
         knownErrors.includes(error.message) ||
-        error.message.includes(
-          "must belong to a",
-        )
+        error.message.includes("must belong to a")
       ) {
         return res.status(400).json({
           success: false,
@@ -107,6 +102,21 @@ export async function getOrganizationsController(
   res: Response,
 ) {
   try {
+    // ----------------------------------------------------------
+    // Make sure authentication already happened
+    // ----------------------------------------------------------
+
+    if (!req.user?.sub) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    // ----------------------------------------------------------
+    // Validate query parameters
+    // ----------------------------------------------------------
+
     const parsed =
       organizationQuerySchema.safeParse(
         req.query,
@@ -121,43 +131,77 @@ export async function getOrganizationsController(
       });
     }
 
-    const requiredPermission = parsed.data.isActive
-  ? "UNIT_ACTIVATE"
-  : "UNIT_DEACTIVATE";
+    // ----------------------------------------------------------
+    // Check UNIT_VIEW permission
+    //
+    // New RBAC structure:
+    //
+    // User → Role → RolePermission → Permission
+    // ----------------------------------------------------------
 
-const userRoles = await prisma.userRole.findMany({
-  where: {
-    userId: req.user!.sub,
-    role: {
-      isActive: true,
-    },
-  },
-  include: {
-    role: {
-      include: {
-        permissions: {
-          include: {
-            permission: true,
+    const user = await prisma.user.findUnique({
+      where: {
+        userId: req.user.sub,
+      },
+      select: {
+        role: {
+          select: {
+            isActive: true,
+
+            permissions: {
+              select: {
+                permission: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
-    },
-  },
-});
+    });
 
-const hasPermission = userRoles.some((userRole) =>
-  userRole.role.permissions.some(
-    (rolePermission) =>
-      rolePermission.permission.name === requiredPermission,
-  ),
-);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated user not found.",
+      });
+    }
 
-if (!hasPermission) {
-  return res.status(403).json({
-    success: false,
-    message: "You do not have permission to perform this action.",
-  });
-}
+    // ----------------------------------------------------------
+    // Make sure the user's role is active
+    // ----------------------------------------------------------
+
+    if (!user.role || !user.role.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "User role is inactive.",
+      });
+    }
+
+    // ----------------------------------------------------------
+    // Check required permission
+    // ----------------------------------------------------------
+
+    const hasPermission =
+      user.role.permissions.some(
+        (rolePermission) =>
+          rolePermission.permission.name ===
+          "UNIT_VIEW",
+      );
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You do not have permission to view organizational units.",
+      });
+    }
+
+    // ----------------------------------------------------------
+    // Get organizations
+    // ----------------------------------------------------------
 
     const result =
       await getOrganizations(parsed.data);
@@ -194,7 +238,8 @@ export async function getOrganizationByIdController(
     if (typeof unitId !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Invalid organizational unit ID.",
+        message:
+          "Invalid organizational unit ID.",
       });
     }
 
@@ -241,14 +286,16 @@ export async function updateOrganizationController(
     if (typeof unitId !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Invalid organizational unit ID.",
+        message:
+          "Invalid organizational unit ID.",
       });
     }
 
     if (!req.user?.sub) {
       return res.status(401).json({
         success: false,
-        message: "Authenticated user not found.",
+        message:
+          "Authenticated user not found.",
       });
     }
 
@@ -299,9 +346,7 @@ export async function updateOrganizationController(
 
       if (
         knownErrors.includes(error.message) ||
-        error.message.includes(
-          "must belong to a",
-        )
+        error.message.includes("must belong to a")
       ) {
         return res.status(400).json({
           success: false,
@@ -332,14 +377,16 @@ export async function updateOrganizationStatusController(
     if (typeof unitId !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Invalid organizational unit ID.",
+        message:
+          "Invalid organizational unit ID.",
       });
     }
 
     if (!req.user?.sub) {
       return res.status(401).json({
         success: false,
-        message: "Authenticated user not found.",
+        message:
+          "Authenticated user not found.",
       });
     }
 
@@ -366,10 +413,9 @@ export async function updateOrganizationStatusController(
 
     return res.status(200).json({
       success: true,
-      message:
-        parsed.data.isActive
-          ? "Organizational unit activated successfully."
-          : "Organizational unit deactivated successfully.",
+      message: parsed.data.isActive
+        ? "Organizational unit activated successfully."
+        : "Organizational unit deactivated successfully.",
       data: result,
     });
   } catch (error) {
@@ -416,7 +462,8 @@ export async function getOrganizationChildrenController(
     if (typeof unitId !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Invalid organizational unit ID.",
+        message:
+          "Invalid organizational unit ID.",
       });
     }
 
@@ -466,7 +513,8 @@ export async function getOrganizationUsersController(
     if (typeof unitId !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Invalid organizational unit ID.",
+        message:
+          "Invalid organizational unit ID.",
       });
     }
 

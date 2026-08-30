@@ -2,6 +2,10 @@ import type { NextFunction, Response } from "express";
 import { AuthenticatedRequest } from "./auth.middleware.js";
 import prisma from "../config/database.js";
 
+// ============================================================
+// AUTHORIZE USER BY PERMISSION
+// ============================================================
+
 export function authorize(permissionName: string) {
   return async (
     req: AuthenticatedRequest,
@@ -9,9 +13,9 @@ export function authorize(permissionName: string) {
     next: NextFunction,
   ) => {
     try {
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
       // 1. Make sure authentication already happened
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
 
       if (!req.user) {
         return res.status(401).json({
@@ -20,17 +24,15 @@ export function authorize(permissionName: string) {
         });
       }
 
-      // ----------------------------------------------------------
-      // 2. Find the user's roles and their permissions
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 2. Find the user and their active role + permissions
+      // --------------------------------------------------------
 
-      const userRoles = await prisma.userRole.findMany({
+      const user = await prisma.user.findUnique({
         where: {
           userId: req.user.sub,
-          role: {
-            isActive: true,
-          },
         },
+
         include: {
           role: {
             include: {
@@ -44,31 +46,63 @@ export function authorize(permissionName: string) {
         },
       });
 
-      // ----------------------------------------------------------
-      // 3. Check whether any active role has the required permission
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 3. Make sure user exists
+      // --------------------------------------------------------
 
-      const hasPermission = userRoles.some((userRole) =>
-        userRole.role.permissions.some(
-          (rolePermission) =>
-            rolePermission.permission.name === permissionName,
-        ),
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "User not found.",
+        });
+      }
+
+      // --------------------------------------------------------
+      // 4. Make sure user account is active
+      // --------------------------------------------------------
+
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: "User account is inactive.",
+        });
+      }
+
+      // --------------------------------------------------------
+      // 5. Make sure user has an active role
+      // --------------------------------------------------------
+
+      if (!user.role || !user.role.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: "User does not have an active role.",
+        });
+      }
+
+      // --------------------------------------------------------
+      // 6. Check whether the role has the required permission
+      // --------------------------------------------------------
+
+      const hasPermission = user.role.permissions.some(
+        (rolePermission) =>
+          rolePermission.permission.name === permissionName,
       );
 
-      // ----------------------------------------------------------
-      // 4. Reject if permission is missing
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 7. Reject if permission is missing
+      // --------------------------------------------------------
 
       if (!hasPermission) {
         return res.status(403).json({
           success: false,
-          message: "You do not have permission to perform this action.",
+          message:
+            "You do not have permission to perform this action.",
         });
       }
 
-      // ----------------------------------------------------------
-      // 5. Permission granted
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 8. Permission granted
+      // --------------------------------------------------------
 
       next();
     } catch (error) {
