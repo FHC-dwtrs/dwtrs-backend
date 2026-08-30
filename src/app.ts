@@ -28,4 +28,5 @@ app.get("/api/v1/health", (_req, res) => {
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api/v1", apiRoutes);
 
+
 export default app;
