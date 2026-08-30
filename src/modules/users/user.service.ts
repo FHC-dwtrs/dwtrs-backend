@@ -27,8 +27,16 @@ const userSelect = {
       unitId: true,
       name: true,
       unitType: true,
-      parentUnitId: true,
       isActive: true,
+  
+      parent: {
+        select: {
+          unitId: true,
+          name: true,
+          unitType: true,
+          isActive: true,
+        },
+      },
     },
   },
 
