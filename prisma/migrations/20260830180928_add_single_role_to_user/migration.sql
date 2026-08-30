@@ -1,24 +1,55 @@
 /*
-  Warnings:
+  Migrate User from UserRole (many-to-many)
+  to User.roleId (single role).
 
-  - You are about to drop the `user_role` table. If the table is not empty, all the data it contains will be lost.
-  - Added the required column `roleId` to the `user` table without a default value. This is not possible if the table is not empty.
-
+  Existing role assignments are preserved.
 */
--- DropForeignKey
-ALTER TABLE "user_role" DROP CONSTRAINT "user_role_roleId_fkey";
 
--- DropForeignKey
-ALTER TABLE "user_role" DROP CONSTRAINT "user_role_userId_fkey";
+-- 1. Add roleId as nullable first
+ALTER TABLE "user"
+ADD COLUMN "roleId" UUID;
 
--- AlterTable
-ALTER TABLE "user" ADD COLUMN     "roleId" UUID NOT NULL;
+-- 2. Copy the existing role assignment from user_role
+UPDATE "user" u
+SET "roleId" = ur."roleId"
+FROM "user_role" ur
+WHERE ur."userId" = u."userId";
 
--- DropTable
+-- 3. Make sure every existing user received a role
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "user"
+    WHERE "roleId" IS NULL
+  ) THEN
+    RAISE EXCEPTION
+      'Migration aborted: one or more users do not have a role assignment in user_role.';
+  END IF;
+END $$;
+
+-- 4. Now make roleId required
+ALTER TABLE "user"
+ALTER COLUMN "roleId" SET NOT NULL;
+
+-- 5. Remove the old UserRole foreign keys
+ALTER TABLE "user_role"
+DROP CONSTRAINT "user_role_roleId_fkey";
+
+ALTER TABLE "user_role"
+DROP CONSTRAINT "user_role_userId_fkey";
+
+-- 6. Remove the old many-to-many table
 DROP TABLE "user_role";
 
--- CreateIndex
-CREATE INDEX "user_roleId_idx" ON "user"("roleId");
+-- 7. Index the new roleId column
+CREATE INDEX "user_roleId_idx"
+ON "user"("roleId");
 
--- AddForeignKey
-ALTER TABLE "user" ADD CONSTRAINT "user_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "role"("roleId") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- 8. Add the new User → Role foreign key
+ALTER TABLE "user"
+ADD CONSTRAINT "user_roleId_fkey"
+FOREIGN KEY ("roleId")
+REFERENCES "role"("roleId")
+ON DELETE RESTRICT
+ON UPDATE CASCADE;
