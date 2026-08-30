@@ -816,6 +816,7 @@ const adminUser = await prisma.user.upsert({
     passwordHash,
     isActive: true,
     unitId: null,
+    roleId: systemAdminRole.roleId,
   },
   create: {
     name: bootstrapAdmin.name,
@@ -823,22 +824,10 @@ const adminUser = await prisma.user.upsert({
     passwordHash,
     isActive: true,
     unitId: null,
-  },
-});
-
-await prisma.userRole.upsert({
-  where: {
-    userId_roleId: {
-      userId: adminUser.userId,
-      roleId: systemAdminRole.roleId,
-    },
-  },
-  update: {},
-  create: {
-    userId: adminUser.userId,
     roleId: systemAdminRole.roleId,
   },
 });
+
 
 console.log(`Bootstrap System Admin ensured: ${adminUser.email}`);
   // ==========================================================

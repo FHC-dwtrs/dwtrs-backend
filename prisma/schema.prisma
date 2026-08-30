@@ -224,6 +224,7 @@ model User {
   userId String @id @default(uuid()) @db.Uuid
 
   unitId String? @db.Uuid
+  roleId String  @db.Uuid
 
   name         String    @db.VarChar(150)
   email        String    @unique @db.VarChar(255)
@@ -236,7 +237,7 @@ model User {
 
   unit OrganizationalUnit? @relation(fields: [unitId], references: [unitId], onDelete: Restrict, onUpdate: Cascade)
 
-  roles UserRole[]
+  role Role @relation(fields: [roleId], references: [roleId], onDelete: Restrict, onUpdate: Cascade)
 
   assignedWorkflows WorkflowAssignment[] @relation("AssignmentPerformedBy")
 
@@ -259,6 +260,7 @@ model User {
   notifications Notification[]
 
   @@index([unitId])
+  @@index([roleId])
   @@index([isActive])
   @@map("user")
 }
@@ -276,7 +278,7 @@ model Role {
 
   createdAt DateTime @default(now())
 
-  users       UserRole[]
+  users       User[]
   permissions RolePermission[]
 
   @@index([isActive])
@@ -300,25 +302,6 @@ model Permission {
   @@index([resource])
   @@index([action])
   @@map("permission")
-}
-
-// ============================================================
-// 9. USER ROLE
-// ============================================================
-
-model UserRole {
-  userId String @db.Uuid
-  roleId String @db.Uuid
-
-  assignedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: Cascade)
-
-  role Role @relation(fields: [roleId], references: [roleId], onDelete: Cascade, onUpdate: Cascade)
-
-  @@id([userId, roleId])
-  @@index([roleId])
-  @@map("user_role")
 }
 
 // ============================================================

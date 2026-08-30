@@ -8,23 +8,25 @@ export async function loginUser(input: LoginInput) {
     where: {
       email: input.email,
     },
+
     include: {
       unit: true,
-      roles: {
+
+      role: {
         include: {
-          role: {
+          permissions: {
             include: {
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
+              permission: true,
             },
           },
         },
       },
     },
   });
+
+  // ----------------------------------------------------------
+  // Validate user
+  // ----------------------------------------------------------
 
   if (!user) {
     throw new Error("Invalid email or password");
@@ -33,6 +35,10 @@ export async function loginUser(input: LoginInput) {
   if (!user.isActive) {
     throw new Error("User account is inactive");
   }
+
+  // ----------------------------------------------------------
+  // Validate password
+  // ----------------------------------------------------------
 
   const passwordValid = await argon2.verify(
     user.passwordHash,
@@ -43,21 +49,24 @@ export async function loginUser(input: LoginInput) {
     throw new Error("Invalid email or password");
   }
 
-  const roles = user.roles.map(
-    (userRole) => userRole.role.name,
+  // ----------------------------------------------------------
+  // Role
+  // ----------------------------------------------------------
+
+  const role = user.role.name;
+
+  // ----------------------------------------------------------
+  // Permissions
+  // ----------------------------------------------------------
+
+  const permissions = user.role.permissions.map(
+    (rolePermission) =>
+      rolePermission.permission.name,
   );
 
-  const permissions = [
-    ...new Set(
-      user.roles.flatMap(
-        (userRole) =>
-          userRole.role.permissions.map(
-            (rolePermission) =>
-              rolePermission.permission.name,
-          ),
-      ),
-    ),
-  ];
+  // ----------------------------------------------------------
+  // JWT
+  // ----------------------------------------------------------
 
   const secret = process.env.JWT_SECRET;
 
@@ -69,7 +78,7 @@ export async function loginUser(input: LoginInput) {
     {
       sub: user.userId,
       email: user.email,
-      roles,
+      role,
       unitId: user.unitId,
     },
     secret,
@@ -78,29 +87,42 @@ export async function loginUser(input: LoginInput) {
     },
   );
 
+  // ----------------------------------------------------------
+  // Update last login
+  // ----------------------------------------------------------
+
   await prisma.user.update({
     where: {
       userId: user.userId,
     },
+
     data: {
       lastLoginAt: new Date(),
     },
   });
 
+  // ----------------------------------------------------------
+  // Response
+  // ----------------------------------------------------------
+
   return {
     token,
+
     user: {
       userId: user.userId,
       name: user.name,
       email: user.email,
+
       unit: user.unit
-  ? {
-      id: user.unit.unitId,
-      name: user.unit.name,
-      unitType: user.unit.unitType,
-    }
-  : null,
-      roles,
+        ? {
+            id: user.unit.unitId,
+            name: user.unit.name,
+            unitType: user.unit.unitType,
+          }
+        : null,
+
+      role,
+
       permissions,
     },
   };
