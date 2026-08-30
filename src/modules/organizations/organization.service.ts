@@ -405,7 +405,22 @@ export async function updateOrganizationStatus(
       );
     }
 
-    // Don't deactivate a unit that still has active children.
+    // --------------------------------------------------------
+    // Prevent duplicate status updates
+    // --------------------------------------------------------
+
+    if (existing.isActive === input.isActive) {
+      throw new Error(
+        input.isActive
+          ? "Organizational unit is already active."
+          : "Organizational unit is already inactive.",
+      );
+    }
+
+    // --------------------------------------------------------
+    // Don't deactivate a unit with active children
+    // --------------------------------------------------------
+
     if (!input.isActive) {
       const activeChildren =
         await tx.organizationalUnit.count({
@@ -422,6 +437,10 @@ export async function updateOrganizationStatus(
       }
     }
 
+    // --------------------------------------------------------
+    // Update status
+    // --------------------------------------------------------
+
     const updated =
       await tx.organizationalUnit.update({
         where: {
@@ -433,13 +452,19 @@ export async function updateOrganizationStatus(
         },
       });
 
+    // --------------------------------------------------------
+    // Audit
+    // --------------------------------------------------------
+
     await createAuditLog(tx, {
       userId,
-      action:
-        input.isActive
-          ? "ORGANIZATIONAL_UNIT_ACTIVATED"
-          : "ORGANIZATIONAL_UNIT_DEACTIVATED",
+
+      action: input.isActive
+        ? "ORGANIZATIONAL_UNIT_ACTIVATED"
+        : "ORGANIZATIONAL_UNIT_DEACTIVATED",
+
       entityType: "ORGANIZATIONAL_UNIT",
+
       entityId: unitId,
 
       oldValues: {
@@ -454,7 +479,6 @@ export async function updateOrganizationStatus(
     return updated;
   });
 }
-
 // ============================================================
 // GET CHILDREN
 // ============================================================
