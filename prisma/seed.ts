@@ -532,6 +532,8 @@ const rolePermissions: Record<string, string[]> = {
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
+
+    "UNIT_VIEW",
   ],
 
   // ==========================================================
