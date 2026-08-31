@@ -6,7 +6,8 @@ import {
   getCaseByIdController,
   createCaseController,
   updateCaseController,
-  archiveCaseController,
+  toggleCaseArchiveController,
+  
 } from "./case.controller.js";
 
 
@@ -221,13 +222,15 @@ router.patch(
   authorize("CASE_UPDATE"),
   updateCaseController,
 );
-
 /**
  * @swagger
  * /cases/{caseId}/archive:
- *   post:
- *     summary: Archive a case
- *     description: Archive a case after a final decision has been made. Only finalized cases can be archived.
+ *   patch:
+ *     summary: Archive or unarchive a case
+ *     description: |
+ *       Archive or unarchive a case using the archived flag.
+ *       A case can only be archived after an APPROVED decision has been recorded.
+ *       The operation is audited.
  *     tags:
  *       - Cases
  *     security:
@@ -240,25 +243,38 @@ router.patch(
  *         schema:
  *           type: string
  *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - archived
+ *             properties:
+ *               archived:
+ *                 type: boolean
+ *                 description: Set true to archive the case or false to unarchive it.
+ *                 example: true
  *     responses:
  *       200:
- *         description: Case archived successfully
+ *         description: Case archive status updated successfully
  *       400:
- *         description: Case cannot be archived because it has not been finalized or is already archived
+ *         description: Invalid archive data or case cannot be archived
  *       401:
- *         description: Authentication required
+ *         description: Unauthorized
  *       403:
  *         description: Forbidden
  *       404:
  *         description: Case not found
  *       500:
- *         description: Failed to archive case
+ *         description: Failed to update case archive status
  */
-router.post(
+router.patch(
   "/:caseId/archive",
   authenticate,
   authorize("CASE_ARCHIVE"),
-  archiveCaseController,
+  toggleCaseArchiveController,
 );
 
 export default router;

@@ -348,23 +348,32 @@ export async function updateCase(
   });
 }
 
-
 // ============================================================
-// ARCHIVE CASE
+// ARCHIVE / UNARCHIVE CASE
 // ============================================================
 
-export async function archiveCase(
+export async function toggleCaseArchive(
   caseId: string,
+  archived: boolean,
   userId: string,
 ) {
   return prisma.$transaction(async (tx) => {
     // --------------------------------------------------------
-    // 1. GET CASE
+    // 1. GET EXISTING CASE
     // --------------------------------------------------------
 
     const existingCase = await tx.case.findUnique({
       where: {
         caseId,
+      },
+
+      include: {
+        decisions: {
+          orderBy: {
+            decidedAt: "desc",
+          },
+          take: 1,
+        },
       },
     });
 
@@ -373,66 +382,75 @@ export async function archiveCase(
     }
 
     // --------------------------------------------------------
-    // 2. CHECK DECISION
+    // 2. CHECK CURRENT ARCHIVE STATE
     // --------------------------------------------------------
 
-    const latestDecision = await tx.decision.findFirst({
-      where: {
-        caseId,
-      },
-      orderBy: {
-        decidedAt: "desc",
-      },
-    });
-
-    if (!latestDecision) {
+    if (existingCase.isArchived === archived) {
       throw new Error(
-        "Case cannot be archived without a decision.",
-      );
-    }
-
-    if (latestDecision.decisionType !== "APPROVED") {
-      throw new Error(
-        "Only approved cases can be archived.",
+        archived
+          ? "Case is already archived"
+          : "Case is already unarchived",
       );
     }
 
     // --------------------------------------------------------
-    // 3. CHECK ALREADY ARCHIVED
+    // 3. ARCHIVE VALIDATION
+    // --------------------------------------------------------
+    // A case can only be archived after approval.
+    //
+    // Unarchiving is allowed without changing the decision.
     // --------------------------------------------------------
 
-    if (existingCase.status === "ARCHIVED") {
-      throw new Error("Case is already archived.");
+    if (archived) {
+      const latestDecision = existingCase.decisions[0];
+
+      if (!latestDecision) {
+        throw new Error(
+          "Case cannot be archived because no decision has been made.",
+        );
+      }
+
+      if (latestDecision.decisionType !== "APPROVED") {
+        throw new Error(
+          "Only approved cases can be archived.",
+        );
+      }
     }
 
     // --------------------------------------------------------
-    // 4. UPDATE CASE STATUS
+    // 4. SAVE OLD VALUES
     // --------------------------------------------------------
 
-    const archivedCase = await tx.case.update({
+    const oldValues = {
+      isArchived: existingCase.isArchived,
+      archivedAt: existingCase.archivedAt,
+      archivedBy: existingCase.archivedBy,
+    };
+
+    // --------------------------------------------------------
+    // 5. UPDATE ARCHIVE STATE
+    // --------------------------------------------------------
+
+    const updatedCase = await tx.case.update({
       where: {
         caseId,
       },
 
       data: {
-        status: "ARCHIVED",
+        isArchived: archived,
+
+        archivedAt: archived
+          ? new Date()
+          : null,
+
+        archivedBy: archived
+          ? userId
+          : null,
       },
 
       include: {
         customer: true,
         currentUnit: true,
-      },
-    });
-
-    // --------------------------------------------------------
-    // 5. STATUS HISTORY
-    // --------------------------------------------------------
-
-    await tx.statusHistory.create({
-      data: {
-        caseId,
-        changedBy: userId,
-        status: "ARCHIVED",
       },
     });
 
@@ -445,20 +463,23 @@ export async function archiveCase(
         userId,
         caseId,
 
-        action: "CASE_ARCHIVE",
+        action: archived
+          ? "CASE_ARCHIVE"
+          : "CASE_UNARCHIVE",
+
         entityType: "CASE",
         entityId: caseId,
 
-        oldValues: {
-          status: existingCase.status,
-        },
+        oldValues,
 
         newValues: {
-          status: "ARCHIVED",
+          isArchived: updatedCase.isArchived,
+          archivedAt: updatedCase.archivedAt,
+          archivedBy: updatedCase.archivedBy,
         },
       },
     });
 
-    return archivedCase;
+    return updatedCase;
   });
 }

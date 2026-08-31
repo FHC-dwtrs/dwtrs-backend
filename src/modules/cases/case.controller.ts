@@ -7,7 +7,7 @@ import {
   getCaseById,
   createCase,
   updateCase,
-  archiveCase,
+  toggleCaseArchive,
 } from "./case.service.js";
 
 import {
@@ -216,22 +216,30 @@ export async function updateCaseController(
 }
 
 // ============================================================
-// ARCHIVE CASE
+// ARCHIVE / UNARCHIVE CASE
 // ============================================================
 
-export async function archiveCaseController(
+export async function toggleCaseArchiveController(
   req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
+    // --------------------------------------------------------
+    // 1. VALIDATE CASE ID
+    // --------------------------------------------------------
+
     const { caseId } = req.params;
 
     if (typeof caseId !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Invalid case ID",
+        message: "Invalid case ID.",
       });
     }
+
+    // --------------------------------------------------------
+    // 2. VALIDATE AUTHENTICATED USER
+    // --------------------------------------------------------
 
     const userId = req.user?.sub;
 
@@ -242,61 +250,115 @@ export async function archiveCaseController(
       });
     }
 
-    const archivedCase = await archiveCase(
+    // --------------------------------------------------------
+    // 3. VALIDATE REQUEST BODY
+    // --------------------------------------------------------
+
+    const { archived } = req.body;
+
+    if (typeof archived !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "The 'archived' field must be a boolean.",
+      });
+    }
+
+    // --------------------------------------------------------
+    // 4. TOGGLE ARCHIVE STATE
+    // --------------------------------------------------------
+
+    const updatedCase = await toggleCaseArchive(
       caseId,
+      archived,
       userId,
     );
 
+    // --------------------------------------------------------
+    // 5. RESPONSE
+    // --------------------------------------------------------
+
     return res.status(200).json({
       success: true,
-      message: "Case archived successfully.",
-      data: serializeBigInt(archivedCase),
+      message: archived
+        ? "Case archived successfully."
+        : "Case unarchived successfully.",
+      data: serializeBigInt(updatedCase),
     });
   } catch (error) {
-    console.error("Archive case error:", error);
+    console.error(
+      "Toggle case archive error:",
+      error,
+    );
 
-    if (error instanceof Error) {
-      if (error.message === "Case not found") {
-        return res.status(404).json({
-          success: false,
-          message: "Case not found.",
-        });
-      }
+    // --------------------------------------------------------
+    // CASE NOT FOUND
+    // --------------------------------------------------------
 
-      if (
-        error.message ===
-        "Case cannot be archived without a decision."
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
-      }
-
-      if (
-        error.message ===
-        "Only approved cases can be archived."
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
-      }
-
-      if (
-        error.message ===
-        "Case is already archived."
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
-      }
+    if (
+      error instanceof Error &&
+      error.message === "Case not found"
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: "Case not found.",
+      });
     }
+
+    // --------------------------------------------------------
+    // ALREADY IN REQUESTED STATE
+    // --------------------------------------------------------
+
+    if (
+      error instanceof Error &&
+      (
+        error.message === "Case is already archived" ||
+        error.message === "Case is already unarchived"
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    // --------------------------------------------------------
+    // NO DECISION
+    // --------------------------------------------------------
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        "Case cannot be archived because no decision has been made."
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    // --------------------------------------------------------
+    // NOT APPROVED
+    // --------------------------------------------------------
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        "Only approved cases can be archived."
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    // --------------------------------------------------------
+    // SERVER ERROR
+    // --------------------------------------------------------
 
     return res.status(500).json({
       success: false,
-      message: "Failed to archive case.",
+      message: "Failed to update case archive status.",
     });
   }
 }
