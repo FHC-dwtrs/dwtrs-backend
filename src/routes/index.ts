@@ -10,6 +10,7 @@ import customerRoutes from "../modules/customers/customer.routes.js";
 import organizationRoutes from "../modules/organizations/organization.routes.js";
 import userRoutes from "../modules/users/user.routes.js";
 import auditRoutes from "../modules/audit/audit.routes.js";
+import publicRoutes from "../modules/public/public.routes.js";
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use("/customers", customerRoutes);
 router.use("/organizations", organizationRoutes);
 router.use("/", userRoutes);
 router.use("/audit", auditRoutes);
+router.use("/public", publicRoutes);
 
 export default router;
