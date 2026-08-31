@@ -347,3 +347,118 @@ export async function updateCase(
     return updatedCase;
   });
 }
+
+
+// ============================================================
+// ARCHIVE CASE
+// ============================================================
+
+export async function archiveCase(
+  caseId: string,
+  userId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    // --------------------------------------------------------
+    // 1. GET CASE
+    // --------------------------------------------------------
+
+    const existingCase = await tx.case.findUnique({
+      where: {
+        caseId,
+      },
+    });
+
+    if (!existingCase) {
+      throw new Error("Case not found");
+    }
+
+    // --------------------------------------------------------
+    // 2. CHECK DECISION
+    // --------------------------------------------------------
+
+    const latestDecision = await tx.decision.findFirst({
+      where: {
+        caseId,
+      },
+      orderBy: {
+        decidedAt: "desc",
+      },
+    });
+
+    if (!latestDecision) {
+      throw new Error(
+        "Case cannot be archived without a decision.",
+      );
+    }
+
+    if (latestDecision.decisionType !== "APPROVED") {
+      throw new Error(
+        "Only approved cases can be archived.",
+      );
+    }
+
+    // --------------------------------------------------------
+    // 3. CHECK ALREADY ARCHIVED
+    // --------------------------------------------------------
+
+    if (existingCase.status === "ARCHIVED") {
+      throw new Error("Case is already archived.");
+    }
+
+    // --------------------------------------------------------
+    // 4. UPDATE CASE STATUS
+    // --------------------------------------------------------
+
+    const archivedCase = await tx.case.update({
+      where: {
+        caseId,
+      },
+
+      data: {
+        status: "ARCHIVED",
+      },
+
+      include: {
+        customer: true,
+        currentUnit: true,
+      },
+    });
+
+    // --------------------------------------------------------
+    // 5. STATUS HISTORY
+    // --------------------------------------------------------
+
+    await tx.statusHistory.create({
+      data: {
+        caseId,
+        changedBy: userId,
+        status: "ARCHIVED",
+      },
+    });
+
+    // --------------------------------------------------------
+    // 6. AUDIT LOG
+    // --------------------------------------------------------
+
+    await tx.auditLog.create({
+      data: {
+        userId,
+        caseId,
+
+        action: "CASE_ARCHIVE",
+        entityType: "CASE",
+        entityId: caseId,
+
+        oldValues: {
+          status: existingCase.status,
+        },
+
+        newValues: {
+          status: "ARCHIVED",
+        },
+      },
+    });
+
+    return archivedCase;
+  });
+}

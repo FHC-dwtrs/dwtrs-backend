@@ -7,6 +7,7 @@ import {
   getCaseById,
   createCase,
   updateCase,
+  archiveCase,
 } from "./case.service.js";
 
 import {
@@ -210,6 +211,92 @@ export async function updateCaseController(
     return res.status(500).json({
       success: false,
       message: "Failed to update case.",
+    });
+  }
+}
+
+// ============================================================
+// ARCHIVE CASE
+// ============================================================
+
+export async function archiveCaseController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    const { caseId } = req.params;
+
+    if (typeof caseId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case ID",
+      });
+    }
+
+    const userId = req.user?.sub;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const archivedCase = await archiveCase(
+      caseId,
+      userId,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Case archived successfully.",
+      data: serializeBigInt(archivedCase),
+    });
+  } catch (error) {
+    console.error("Archive case error:", error);
+
+    if (error instanceof Error) {
+      if (error.message === "Case not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Case not found.",
+        });
+      }
+
+      if (
+        error.message ===
+        "Case cannot be archived without a decision."
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      if (
+        error.message ===
+        "Only approved cases can be archived."
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      if (
+        error.message ===
+        "Case is already archived."
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to archive case.",
     });
   }
 }

@@ -6,6 +6,7 @@ import {
   getCaseByIdController,
   createCaseController,
   updateCaseController,
+  archiveCaseController,
 } from "./case.controller.js";
 
 
@@ -220,4 +221,44 @@ router.patch(
   authorize("CASE_UPDATE"),
   updateCaseController,
 );
+
+/**
+ * @swagger
+ * /cases/{caseId}/archive:
+ *   post:
+ *     summary: Archive a case
+ *     description: Archive a case after a final decision has been made. Only finalized cases can be archived.
+ *     tags:
+ *       - Cases
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: caseId
+ *         in: path
+ *         required: true
+ *         description: Case ID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Case archived successfully
+ *       400:
+ *         description: Case cannot be archived because it has not been finalized or is already archived
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Case not found
+ *       500:
+ *         description: Failed to archive case
+ */
+router.post(
+  "/:caseId/archive",
+  authenticate,
+  authorize("CASE_ARCHIVE"),
+  archiveCaseController,
+);
+
 export default router;
