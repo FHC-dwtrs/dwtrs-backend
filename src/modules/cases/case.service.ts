@@ -10,8 +10,29 @@ import { createCustomer, getCustomerByPhone, updateCustomer } from "../customers
 // GET ALL CASES
 // ============================================================
 
-export async function getCases() {
+export async function getCases(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: {
+      userId,
+    },
+    select: {
+      unitId: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (!user.unitId) {
+    throw new Error("User is not assigned to an organizational unit");
+  }
+
   return prisma.case.findMany({
+    where: {
+      currentUnitId: user.unitId,
+    },
+
     orderBy: {
       submittedAt: "desc",
     },

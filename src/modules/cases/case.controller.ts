@@ -26,7 +26,15 @@ export async function getCasesController(
   res: Response,
 ) {
   try {
-    const cases = await getCases();
+    const userId = req.user?.sub;
+
+if (!userId) {
+  return res.status(401).json({
+    success: false,
+    message: "Authentication required.",
+  });
+}
+    const cases = await getCases(userId);
 
     return res.status(200).json({
       success: true,
