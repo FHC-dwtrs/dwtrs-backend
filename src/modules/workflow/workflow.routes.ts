@@ -9,6 +9,7 @@ import {
   returnCaseController,
   transferCaseController,
   reassignCaseController,
+  getPreviouslyHandledCasesController,
 } from "./workflow.controller.js";
 
 const router = Router();
@@ -316,3 +317,38 @@ router.post(
 );
 
 export default router;
+
+
+// ============================================================
+// PREVIOUSLY HANDLED CASES
+// ============================================================
+
+/**
+ * @swagger
+ * /workflow/previously-handled:
+ *   get:
+ *     summary: Get previously handled cases
+ *     description: |
+ *       Returns cases previously handled by the authenticated
+ *       user's organizational unit and no longer currently held
+ *       by that unit.
+ *     tags:
+ *       - Workflow
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Previously handled cases retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       500:
+ *         description: Failed to retrieve previously handled cases
+ */
+router.get(
+  "/previously-handled",
+  authenticate,
+  authorize("CASE_VIEW"),
+  getPreviouslyHandledCasesController,
+);

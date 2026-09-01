@@ -8,6 +8,7 @@ import {
   returnCase,
   transferCase,
   reassignCase,
+  getPreviouslyHandledCases,
 } from "./workflow.service.js";
 
 import {
@@ -427,6 +428,60 @@ export async function makeCaseDecisionController(
     return res.status(500).json({
       success: false,
       message: "Failed to process case decision.",
+    });
+  }
+}
+
+
+// ============================================================
+// PREVIOUSLY HANDLED CASES CONTROLLER
+// ============================================================
+
+export async function getPreviouslyHandledCasesController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    if (!req.user?.sub) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated user not found.",
+      });
+    }
+
+    const result = await getPreviouslyHandledCases(
+      req.user.sub,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Previously handled cases retrieved successfully.",
+      data: result,
+    });
+  } catch (error) {
+    console.error(
+      "Get previously handled cases error:",
+      error,
+    );
+
+    if (error instanceof Error) {
+      const knownErrors = [
+        "User not found.",
+        "User account is inactive.",
+        "User is not assigned to an organizational unit.",
+      ];
+
+      if (knownErrors.includes(error.message)) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve previously handled cases.",
     });
   }
 }

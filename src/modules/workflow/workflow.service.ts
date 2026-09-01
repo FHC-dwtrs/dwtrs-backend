@@ -1572,3 +1572,148 @@ export async function transferCase(
     };
   });
 }
+
+// ============================================================
+// GET PREVIOUSLY HANDLED CASES
+// ============================================================
+//
+// Returns cases that the authenticated user's organizational
+// unit has previously handled but does not currently hold.
+//
+// Example:
+//
+// R&A → Sector
+// Sector → Directorate
+//
+// Sector sees the case under Previously Handled.
+//
+// If:
+//
+// Directorate → Sector
+// Sector → R&A
+//
+// Sector sees it under Previously Handled again.
+//
+// Duplicate workflow assignments for the same case are
+// collapsed into one case.
+// ============================================================
+
+export async function getPreviouslyHandledCases(
+  userId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    // ========================================================
+    // 1. FIND USER
+    // ========================================================
+
+    const user = await tx.user.findUnique({
+      where: {
+        userId,
+      },
+      include: {
+        unit: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error("User not found.");
+    }
+
+    if (!user.isActive) {
+      throw new Error("User account is inactive.");
+    }
+
+    if (!user.unit) {
+      throw new Error(
+        "User is not assigned to an organizational unit.",
+      );
+    }
+
+    const unitId = user.unit.unitId;
+
+    // ========================================================
+    // 2. FIND COMPLETED ASSIGNMENTS
+    // ========================================================
+    //
+    // The user's unit is the FROM unit.
+    //
+    // That means the unit previously held/handled the case
+    // and subsequently sent it somewhere else.
+    //
+    // We also require completedAt so an active assignment
+    // isn't treated as historical.
+    // ========================================================
+
+    const assignments =
+      await tx.workflowAssignment.findMany({
+        where: {
+          fromUnitId: unitId,
+          assignmentStatus: "COMPLETED",
+          completedAt: {
+            not: null,
+          },
+        },
+        orderBy: {
+          completedAt: "desc",
+        },
+        include: {
+          case: {
+            include: {
+              customer: true,
+              currentUnit: true,
+            },
+          },
+          fromUnit: true,
+          toUnit: true,
+        },
+      });
+
+    // ========================================================
+    // 3. REMOVE DUPLICATE CASES
+    // ========================================================
+    //
+    // A case can be handled by the same unit more than once.
+    //
+    // Example:
+    //
+    // R&A → Sector
+    // Sector → R&A
+    // R&A → Sector
+    //
+    // R&A must see one case, not two.
+    //
+    // Because assignments are ordered newest first, the first
+    // occurrence is the most recent time the unit handled it.
+    // ========================================================
+
+    const seenCaseIds = new Set<string>();
+
+    const previouslyHandledCases = assignments
+      .filter((assignment) => {
+        if (seenCaseIds.has(assignment.caseId)) {
+          return false;
+        }
+
+        seenCaseIds.add(assignment.caseId);
+        return true;
+      })
+      .map((assignment) => ({
+        case: assignment.case,
+        lastHandledAt: assignment.completedAt,
+        lastWorkflowAction: {
+          assignmentId: assignment.assignmentId,
+          fromUnit: assignment.fromUnit,
+          toUnit: assignment.toUnit,
+          assignedAt: assignment.assignedAt,
+          completedAt: assignment.completedAt,
+          remarks: assignment.remarks,
+        },
+      }));
+
+    return {
+      unit: user.unit,
+      count: previouslyHandledCases.length,
+      cases: previouslyHandledCases,
+    };
+  });
+}

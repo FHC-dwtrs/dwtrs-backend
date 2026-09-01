@@ -65,7 +65,7 @@ export async function getCases(userId: string) {
 // GET CASE BY ID
 // ============================================================
 
-export async function getCaseById(caseId: string) {
+/*export async function getCaseById(caseId: string) {
   return prisma.case.findUnique({
     where: {
       caseId,
@@ -100,6 +100,86 @@ export async function getCaseById(caseId: string) {
           toUnit: true,
         },
 
+        orderBy: {
+          assignedAt: "desc",
+        },
+      },
+
+      statusHistory: {
+        orderBy: {
+          changedAt: "desc",
+        },
+      },
+
+      remarks: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+
+      decisions: {
+        orderBy: {
+          decidedAt: "desc",
+        },
+      },
+    },
+  });
+}*/
+export async function getCaseById(
+  caseId: string,
+  userId: string,
+) {
+  const user = await prisma.user.findUnique({
+    where: {
+      userId,
+    },
+    select: {
+      unitId: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (!user.unitId) {
+    throw new Error(
+      "User is not assigned to an organizational unit",
+    );
+  }
+
+  return prisma.case.findFirst({
+    where: {
+      caseId,
+      currentUnitId: user.unitId,
+    },
+
+    include: {
+      customer: true,
+
+      currentUnit: true,
+
+      documents: {
+        where: {
+          deletedAt: null,
+        },
+        include: {
+          attachments: {
+            where: {
+              deletedAt: null,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+
+      workflowAssignments: {
+        include: {
+          fromUnit: true,
+          toUnit: true,
+        },
         orderBy: {
           assignedAt: "desc",
         },

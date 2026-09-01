@@ -53,12 +53,13 @@ if (!userId) {
 // ============================================================
 // GET CASE BY ID
 // ============================================================
-
+/*
 export async function getCaseByIdController(
   req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
+    
     const { caseId } = req.params;
 
     if (typeof caseId !== "string") {
@@ -76,6 +77,69 @@ export async function getCaseByIdController(
         message: "Case not found.",
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      data: serializeBigInt(caseRecord),
+    });
+  } catch (error) {
+    console.error("Get case error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve case.",
+    });
+  }
+}
+*/
+
+export async function getCaseByIdController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    // --------------------------------------------------------
+    // 1. VALIDATE CASE ID
+    // --------------------------------------------------------
+
+    const { caseId } = req.params;
+
+    if (typeof caseId !== "string" || !caseId.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case ID.",
+      });
+    }
+
+    // --------------------------------------------------------
+    // 2. GET CASE
+    // --------------------------------------------------------
+
+    const userId = req.user?.sub;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const caseRecord = await getCaseById(caseId, userId);
+
+    // --------------------------------------------------------
+    // 3. CASE NOT FOUND
+    // --------------------------------------------------------
+
+    if (!caseRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Case not found.",
+      });
+    }
+
+    // --------------------------------------------------------
+    // 4. RESPONSE
+    // --------------------------------------------------------
 
     return res.status(200).json({
       success: true,
