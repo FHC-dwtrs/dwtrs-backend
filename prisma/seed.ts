@@ -446,24 +446,49 @@ const rolePermissions: Record<string, string[]> = {
   // ==========================================================
 
   SYSTEM_ADMIN: [
+    // CASE
     "CASE_VIEW",
 
+    // CUSTOMER
     "CUSTOMER_VIEW",
 
+    // DOCUMENT
     "DOCUMENT_VIEW",
 
+    // ATTACHMENT
     "ATTACHMENT_VIEW",
 
+    // WORKFLOW
     "WORKFLOW_VIEW",
 
+    // REMARKS & DECISIONS
+    // System Admin does not create/view remarks or decisions
+    // according to the permission matrix.
+
+    // STATUS HISTORY
     "STATUS_HISTORY_VIEW",
 
+    // AUDIT
     "AUDIT_VIEW",
     "AUDIT_EXPORT",
 
+    // NOTIFICATIONS
     "NOTIFICATION_VIEW",
     "NOTIFICATION_MARK_READ",
 
+    // REPORTS
+    "REPORT_VIEW",
+    "REPORT_GENERATE",
+    "REPORT_EXPORT",
+
+    // ORGANIZATIONAL UNITS
+    "UNIT_VIEW",
+    "UNIT_CREATE",
+    "UNIT_UPDATE",
+    "UNIT_ACTIVATE",
+    "UNIT_DEACTIVATE",
+
+    // USERS
     "USER_CREATE",
     "USER_VIEW",
     "USER_UPDATE",
@@ -472,21 +497,13 @@ const rolePermissions: Record<string, string[]> = {
     "USER_ASSIGN_ROLE",
     "USER_REMOVE_ROLE",
 
-    "UNIT_CREATE",
-    "UNIT_VIEW",
-    "UNIT_UPDATE",
-    "UNIT_ACTIVATE",
-    "UNIT_DEACTIVATE",
-
+    // ROLES
     "ROLE_VIEW",
     "ROLE_ASSIGN_PERMISSION",
     "ROLE_REMOVE_PERMISSION",
 
+    // PERMISSIONS
     "PERMISSION_VIEW",
-
-    "REPORT_VIEW",
-    "REPORT_GENERATE",
-    "REPORT_EXPORT",
   ],
 
   // ==========================================================
@@ -494,45 +511,56 @@ const rolePermissions: Record<string, string[]> = {
   // ==========================================================
 
   RECORDS_ARCHIVE_STAFF: [
+    // CASE
     "CASE_CREATE",
     "CASE_VIEW",
     "CASE_UPDATE",
     "CASE_ASSIGN",
     "CASE_REASSIGN",
-    "CASE_RETURN",
     "CASE_CHANGE_STATUS",
 
+    // CUSTOMER
     "CUSTOMER_CREATE",
     "CUSTOMER_VIEW",
     "CUSTOMER_UPDATE",
 
+    // DOCUMENT
     "DOCUMENT_CREATE",
     "DOCUMENT_VIEW",
     "DOCUMENT_UPDATE",
     "DOCUMENT_DELETE",
 
+    // ATTACHMENT
     "ATTACHMENT_UPLOAD",
     "ATTACHMENT_VIEW",
     "ATTACHMENT_UPDATE",
     "ATTACHMENT_DELETE",
 
+    // WORKFLOW
     "WORKFLOW_ASSIGN",
     "WORKFLOW_REASSIGN",
-    "WORKFLOW_RETURN",
     "WORKFLOW_VIEW",
 
+    // REMARKS
     "REMARK_CREATE",
     "REMARK_VIEW",
 
+    // DECISIONS
+    "DECISION_VIEW",
+
+    // STATUS HISTORY
     "STATUS_HISTORY_VIEW",
 
+    // NOTIFICATIONS
     "NOTIFICATION_VIEW",
     "NOTIFICATION_MARK_READ",
 
+    // REPORTS
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
 
+    // ORGANIZATIONAL UNITS
     "UNIT_VIEW",
   ],
 
@@ -541,39 +569,48 @@ const rolePermissions: Record<string, string[]> = {
   // ==========================================================
 
   SECTOR_STAFF: [
+    // CASE
     "CASE_VIEW",
-    "CASE_UPDATE",
     "CASE_ASSIGN",
     "CASE_REASSIGN",
     "CASE_RETURN",
     "CASE_CHANGE_STATUS",
     "CASE_ARCHIVE",
 
+    // CUSTOMER
     "CUSTOMER_VIEW",
 
+    // DOCUMENT
     "DOCUMENT_VIEW",
-    "DOCUMENT_UPDATE",
 
+    // ATTACHMENT
     "ATTACHMENT_VIEW",
 
+    // WORKFLOW
     "WORKFLOW_ASSIGN",
     "WORKFLOW_REASSIGN",
     "WORKFLOW_RETURN",
     "WORKFLOW_VIEW",
 
+    // REMARKS
     "REMARK_CREATE",
     "REMARK_VIEW",
 
+    // DECISIONS
     "DECISION_CREATE",
     "DECISION_VIEW",
 
+    // STATUS HISTORY
     "STATUS_HISTORY_VIEW",
 
+    // AUDIT
     "AUDIT_VIEW",
 
+    // NOTIFICATIONS
     "NOTIFICATION_VIEW",
     "NOTIFICATION_MARK_READ",
 
+    // REPORTS
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
@@ -584,36 +621,43 @@ const rolePermissions: Record<string, string[]> = {
   // ==========================================================
 
   DIRECTORATE_STAFF: [
+    // CASE
     "CASE_VIEW",
-    "CASE_UPDATE",
     "CASE_ASSIGN",
     "CASE_REASSIGN",
     "CASE_RETURN",
     "CASE_CHANGE_STATUS",
 
+    // CUSTOMER
     "CUSTOMER_VIEW",
 
+    // DOCUMENT
     "DOCUMENT_VIEW",
-    "DOCUMENT_UPDATE",
 
+    // ATTACHMENT
     "ATTACHMENT_VIEW",
 
+    // WORKFLOW
     "WORKFLOW_ASSIGN",
     "WORKFLOW_REASSIGN",
     "WORKFLOW_RETURN",
     "WORKFLOW_VIEW",
 
+    // REMARKS
     "REMARK_CREATE",
     "REMARK_VIEW",
 
-    "DECISION_CREATE",
+    // DECISIONS
     "DECISION_VIEW",
 
+    // STATUS HISTORY
     "STATUS_HISTORY_VIEW",
 
+    // NOTIFICATIONS
     "NOTIFICATION_VIEW",
     "NOTIFICATION_MARK_READ",
 
+    // REPORTS
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
@@ -624,33 +668,39 @@ const rolePermissions: Record<string, string[]> = {
   // ==========================================================
 
   GROUP_STAFF: [
+    // CASE
     "CASE_VIEW",
-    "CASE_UPDATE",
-    "CASE_ASSIGN",
-    "CASE_REASSIGN",
     "CASE_RETURN",
     "CASE_CHANGE_STATUS",
 
+    // CUSTOMER
     "CUSTOMER_VIEW",
 
+    // DOCUMENT
     "DOCUMENT_VIEW",
-    "DOCUMENT_UPDATE",
 
+    // ATTACHMENT
     "ATTACHMENT_VIEW",
 
-    "WORKFLOW_ASSIGN",
-    "WORKFLOW_REASSIGN",
+    // WORKFLOW
     "WORKFLOW_RETURN",
     "WORKFLOW_VIEW",
 
+    // REMARKS
     "REMARK_CREATE",
     "REMARK_VIEW",
 
+    // DECISIONS
+    "DECISION_VIEW",
+
+    // STATUS HISTORY
     "STATUS_HISTORY_VIEW",
 
+    // NOTIFICATIONS
     "NOTIFICATION_VIEW",
     "NOTIFICATION_MARK_READ",
 
+    // REPORTS
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
