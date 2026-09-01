@@ -30,23 +30,20 @@ export async function getCases(userId: string) {
     );
   }
 
-  // Get total cases in the database
   const totalCases = await prisma.case.count();
 
-  // Get cases belonging to the user's current unit
   const unitCases = await prisma.case.count({
     where: {
       currentUnitId: user.unitId,
     },
   });
 
-  console.log("=================================");
-  console.log("GET CASES DEBUG");
+  console.log("========== GET CASES DEBUG ==========");
   console.log("User ID:", userId);
   console.log("User Unit ID:", user.unitId);
   console.log("Total cases in database:", totalCases);
   console.log("Cases in user's unit:", unitCases);
-  console.log("=================================");
+  console.log("======================================");
 
   return prisma.case.findMany({
     where: {
