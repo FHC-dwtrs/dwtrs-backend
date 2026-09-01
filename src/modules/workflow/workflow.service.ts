@@ -1601,7 +1601,9 @@ export async function getPreviouslyHandledCases(userId: string) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { userId },
-      include: { unit: true },
+      include: {
+        unit: true,
+      },
     });
 
     if (!user) {
@@ -1620,37 +1622,23 @@ export async function getPreviouslyHandledCases(userId: string) {
 
     const unitId = user.unit.unitId;
 
-    /*
-     * A case is considered "previously handled" by this unit when:
-     *
-     * 1. This unit was the FROM unit of a workflow assignment.
-     * 2. The case is no longer currently assigned to this unit.
-     *
-     * We intentionally do NOT filter by assignmentStatus = COMPLETED.
-     *
-     * Why?
-     * When Records & Archive sends a newly registered case to a Sector,
-     * the newly created Records & Archive -> Sector assignment is ACTIVE
-     * because it represents the case currently being held by the Sector.
-     * Therefore, filtering only COMPLETED assignments would incorrectly
-     * exclude newly routed cases from Previously Handled.
-     */
+    console.log("========== PREVIOUSLY HANDLED DEBUG ==========");
+    console.log("userId:", userId);
+    console.log("user unitId:", unitId);
+    console.log("user unit name:", user.unit.name);
 
-    const assignments = await tx.workflowAssignment.findMany({
+    // Get ALL assignments involving this unit.
+    const allAssignments = await tx.workflowAssignment.findMany({
       where: {
-        fromUnitId: unitId,
-
-        case: {
-          currentUnitId: {
-            not: unitId,
+        OR: [
+          {
+            fromUnitId: unitId,
           },
-        },
+          {
+            toUnitId: unitId,
+          },
+        ],
       },
-
-      orderBy: {
-        assignedAt: "desc",
-      },
-
       include: {
         case: {
           include: {
@@ -1658,16 +1646,83 @@ export async function getPreviouslyHandledCases(userId: string) {
             currentUnit: true,
           },
         },
-
         fromUnit: true,
         toUnit: true,
       },
+      orderBy: {
+        assignedAt: "desc",
+      },
     });
 
-    /*
-     * A case can have multiple workflow assignments involving the
-     * same unit. We only return each case once.
-     */
+    console.log(
+      "ALL ASSIGNMENTS INVOLVING THIS UNIT:",
+      allAssignments.map((assignment) => ({
+        assignmentId: assignment.assignmentId,
+        caseId: assignment.caseId,
+        assignmentStatus: assignment.assignmentStatus,
+        fromUnitId: assignment.fromUnitId,
+        fromUnitName: assignment.fromUnit?.name,
+        toUnitId: assignment.toUnitId,
+        toUnitName: assignment.toUnit?.name,
+        caseCurrentUnitId: assignment.case.currentUnitId,
+        caseCurrentUnitName: assignment.case.currentUnit?.name,
+        assignedAt: assignment.assignedAt,
+        completedAt: assignment.completedAt,
+      }))
+    );
+
+    // Specifically get assignments where this unit SENT the case.
+    const outgoingAssignments = await tx.workflowAssignment.findMany({
+      where: {
+        fromUnitId: unitId,
+      },
+      include: {
+        case: {
+          include: {
+            customer: true,
+            currentUnit: true,
+          },
+        },
+        fromUnit: true,
+        toUnit: true,
+      },
+      orderBy: {
+        assignedAt: "desc",
+      },
+    });
+
+    console.log(
+      "OUTGOING ASSIGNMENTS:",
+      outgoingAssignments.map((assignment) => ({
+        assignmentId: assignment.assignmentId,
+        caseId: assignment.caseId,
+        assignmentStatus: assignment.assignmentStatus,
+        fromUnitId: assignment.fromUnitId,
+        fromUnitName: assignment.fromUnit?.name,
+        toUnitId: assignment.toUnitId,
+        toUnitName: assignment.toUnit?.name,
+        caseCurrentUnitId: assignment.case.currentUnitId,
+        caseCurrentUnitName: assignment.case.currentUnit?.name,
+      }))
+    );
+
+    // Previously handled = this unit sent the case somewhere else
+    // and the case is no longer currently with this unit.
+    const assignments = outgoingAssignments.filter(
+      (assignment) => assignment.case.currentUnitId !== unitId
+    );
+
+    console.log(
+      "PREVIOUSLY HANDLED MATCHES:",
+      assignments.map((assignment) => ({
+        assignmentId: assignment.assignmentId,
+        caseId: assignment.caseId,
+        fromUnit: assignment.fromUnit?.name,
+        toUnit: assignment.toUnit?.name,
+        currentUnit: assignment.case.currentUnit?.name,
+      }))
+    );
+
     const seenCaseIds = new Set<string>();
 
     const previouslyHandledCases = assignments
@@ -1682,26 +1737,24 @@ export async function getPreviouslyHandledCases(userId: string) {
       .map((assignment) => ({
         case: assignment.case,
 
-        /*
-         * assignedAt represents when this unit sent the case
-         * to the next unit.
-         */
         lastHandledAt: assignment.assignedAt,
 
         lastWorkflowAction: {
           assignmentId: assignment.assignmentId,
-
           fromUnit: assignment.fromUnit,
-
           toUnit: assignment.toUnit,
-
           assignedAt: assignment.assignedAt,
-
           completedAt: assignment.completedAt,
-
           remarks: assignment.remarks,
         },
       }));
+
+    console.log(
+      "FINAL PREVIOUSLY HANDLED COUNT:",
+      previouslyHandledCases.length
+    );
+
+    console.log("==============================================");
 
     return {
       unit: user.unit,
