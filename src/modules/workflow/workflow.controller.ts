@@ -1,4 +1,4 @@
-import type { Response, Request } from "express";
+import type { Response } from "express";
 
 import type { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
@@ -437,27 +437,21 @@ export async function makeCaseDecisionController(
 // PREVIOUSLY HANDLED CASES CONTROLLER
 // ============================================================
 
-interface ExtendedRequest extends Request {
-  user?: {
-    userId: string;
-  };
-}
-
 export async function getPreviouslyHandledCasesController(
-  req: ExtendedRequest,
-  res: Response
+  req: AuthenticatedRequest,
+  res: Response,
 ) {
   try {
-    const userId = req.user?.userId;
-
-    if (!userId) {
+    if (!req.user?.sub) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized",
+        message: "Authenticated user not found.",
       });
     }
 
-    const result = await getPreviouslyHandledCases(userId);
+    const result = await getPreviouslyHandledCases(
+      req.user.sub,
+    );
 
     return res.status(200).json({
       success: true,
@@ -465,14 +459,29 @@ export async function getPreviouslyHandledCasesController(
       data: result,
     });
   } catch (error) {
-    console.error("Get previously handled cases error:", error);
+    console.error(
+      "Get previously handled cases error:",
+      error,
+    );
+
+    if (error instanceof Error) {
+      const knownErrors = [
+        "User not found.",
+        "User account is inactive.",
+        "User is not assigned to an organizational unit.",
+      ];
+
+      if (knownErrors.includes(error.message)) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+    }
 
     return res.status(500).json({
       success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to retrieve previously handled cases.",
+      message: "Failed to retrieve previously handled cases.",
     });
   }
 }
