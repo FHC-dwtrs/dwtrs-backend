@@ -1597,22 +1597,11 @@ export async function transferCase(
 // Duplicate workflow assignments for the same case are
 // collapsed into one case.
 // ============================================================
-
-export async function getPreviouslyHandledCases(
-  userId: string,
-) {
+export async function getPreviouslyHandledCases(userId: string) {
   return prisma.$transaction(async (tx) => {
-    // ========================================================
-    // 1. FIND USER
-    // ========================================================
-
     const user = await tx.user.findUnique({
-      where: {
-        userId,
-      },
-      include: {
-        unit: true,
-      },
+      where: { userId },
+      include: { unit: true },
     });
 
     if (!user) {
@@ -1625,67 +1614,60 @@ export async function getPreviouslyHandledCases(
 
     if (!user.unit) {
       throw new Error(
-        "User is not assigned to an organizational unit.",
+        "User is not assigned to an organizational unit."
       );
     }
 
     const unitId = user.unit.unitId;
 
-    // ========================================================
-    // 2. FIND COMPLETED ASSIGNMENTS
-    // ========================================================
-    //
-    // The user's unit is the FROM unit.
-    //
-    // That means the unit previously held/handled the case
-    // and subsequently sent it somewhere else.
-    //
-    // We also require completedAt so an active assignment
-    // isn't treated as historical.
-    // ========================================================
+    /*
+     * A case is considered "previously handled" by this unit when:
+     *
+     * 1. This unit was the FROM unit of a workflow assignment.
+     * 2. The case is no longer currently assigned to this unit.
+     *
+     * We intentionally do NOT filter by assignmentStatus = COMPLETED.
+     *
+     * Why?
+     * When Records & Archive sends a newly registered case to a Sector,
+     * the newly created Records & Archive -> Sector assignment is ACTIVE
+     * because it represents the case currently being held by the Sector.
+     * Therefore, filtering only COMPLETED assignments would incorrectly
+     * exclude newly routed cases from Previously Handled.
+     */
 
-    const assignments =
-      await tx.workflowAssignment.findMany({
-        where: {
-          fromUnitId: unitId,
-          assignmentStatus: "COMPLETED",
-          completedAt: {
-            not: null,
+    const assignments = await tx.workflowAssignment.findMany({
+      where: {
+        fromUnitId: unitId,
+
+        case: {
+          currentUnitId: {
+            not: unitId,
           },
         },
-        orderBy: {
-          completedAt: "desc",
-        },
-        include: {
-          case: {
-            include: {
-              customer: true,
-              currentUnit: true,
-            },
+      },
+
+      orderBy: {
+        assignedAt: "desc",
+      },
+
+      include: {
+        case: {
+          include: {
+            customer: true,
+            currentUnit: true,
           },
-          fromUnit: true,
-          toUnit: true,
         },
-      });
 
-    // ========================================================
-    // 3. REMOVE DUPLICATE CASES
-    // ========================================================
-    //
-    // A case can be handled by the same unit more than once.
-    //
-    // Example:
-    //
-    // R&A → Sector
-    // Sector → R&A
-    // R&A → Sector
-    //
-    // R&A must see one case, not two.
-    //
-    // Because assignments are ordered newest first, the first
-    // occurrence is the most recent time the unit handled it.
-    // ========================================================
+        fromUnit: true,
+        toUnit: true,
+      },
+    });
 
+    /*
+     * A case can have multiple workflow assignments involving the
+     * same unit. We only return each case once.
+     */
     const seenCaseIds = new Set<string>();
 
     const previouslyHandledCases = assignments
@@ -1699,13 +1681,24 @@ export async function getPreviouslyHandledCases(
       })
       .map((assignment) => ({
         case: assignment.case,
-        lastHandledAt: assignment.completedAt,
+
+        /*
+         * assignedAt represents when this unit sent the case
+         * to the next unit.
+         */
+        lastHandledAt: assignment.assignedAt,
+
         lastWorkflowAction: {
           assignmentId: assignment.assignmentId,
+
           fromUnit: assignment.fromUnit,
+
           toUnit: assignment.toUnit,
+
           assignedAt: assignment.assignedAt,
+
           completedAt: assignment.completedAt,
+
           remarks: assignment.remarks,
         },
       }));
