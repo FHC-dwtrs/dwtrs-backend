@@ -504,6 +504,9 @@ const rolePermissions: Record<string, string[]> = {
 
     // PERMISSIONS
     "PERMISSION_VIEW",
+
+    // ORGANIZATIONAL UNITS
+    "UNIT_VIEW",
   ],
 
   // ==========================================================
@@ -614,6 +617,9 @@ const rolePermissions: Record<string, string[]> = {
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
+
+    // ORGANIZATIONAL UNITS
+    "UNIT_VIEW",
   ],
 
   // ==========================================================
@@ -661,6 +667,9 @@ const rolePermissions: Record<string, string[]> = {
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
+
+    // ORGANIZATIONAL UNITS
+    "UNIT_VIEW",
   ],
 
   // ==========================================================
@@ -704,7 +713,11 @@ const rolePermissions: Record<string, string[]> = {
     "REPORT_VIEW",
     "REPORT_GENERATE",
     "REPORT_EXPORT",
+
+    // ORGANIZATIONAL UNITS
+    "UNIT_VIEW",
   ],
+
 };
 
 

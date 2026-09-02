@@ -125,6 +125,7 @@ async function main() {
       passwordHash: archivePasswordHash,
       unitId: recordsArchiveUnit.unitId,
       isActive: true,
+      roleId: archiveRole.roleId,
     },
   });
 
