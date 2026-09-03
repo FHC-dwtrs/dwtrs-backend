@@ -10,6 +10,8 @@ import {
   transferCaseController,
   reassignCaseController,
   getPreviouslyHandledCasesController,
+  getCaseHistoryController,
+  getCaseRemarksController,
 } from "./workflow.controller.js";
 
 const router = Router();
@@ -316,7 +318,6 @@ router.post(
   makeCaseDecisionController,
 );
 
-export default router;
 
 
 // ============================================================
@@ -352,3 +353,94 @@ router.get(
   authorize("CASE_VIEW"),
   getPreviouslyHandledCasesController,
 );
+
+// ============================================================
+// CASE HISTORY
+// ============================================================
+
+/**
+ * @swagger
+ * /workflow/cases/{caseId}/history:
+ *   get:
+ *     summary: Get case workflow history
+ *     description: |
+ *       Returns a combined, chronological timeline for a case —
+ *       workflow assignments (assign/return/reassign/transfer),
+ *       status changes, and decisions — for the case detail
+ *       "Workflow" tab.
+ *     tags:
+ *       - Workflow
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: caseId
+ *         required: true
+ *         description: Case ID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Case history retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Case not found
+ *       500:
+ *         description: Failed to retrieve case history
+ */
+router.get(
+  "/cases/:caseId/history",
+  authenticate,
+  authorize("CASE_VIEW"),
+  getCaseHistoryController,
+);
+
+// ============================================================
+// CASE REMARKS
+// ============================================================
+
+/**
+ * @swagger
+ * /workflow/cases/{caseId}/remarks:
+ *   get:
+ *     summary: Get case remarks
+ *     description: |
+ *       Returns all remarks left on a case throughout its
+ *       lifecycle (assign/return/reassign/transfer remarks and
+ *       decision notes), for the case detail "Remarks" tab.
+ *     tags:
+ *       - Workflow
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: caseId
+ *         required: true
+ *         description: Case ID
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Case remarks retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Case not found
+ *       500:
+ *         description: Failed to retrieve case remarks
+ */
+router.get(
+  "/cases/:caseId/remarks",
+  authenticate,
+  authorize("CASE_VIEW"),
+  getCaseRemarksController,
+);
+
+export default router;

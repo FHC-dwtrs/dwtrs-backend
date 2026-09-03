@@ -462,6 +462,7 @@ const rolePermissions: Record<string, string[]> = {
     "WORKFLOW_VIEW",
 
     // REMARKS & DECISIONS
+    "REMARK_VIEW",
     // System Admin does not create/view remarks or decisions
     // according to the permission matrix.
 

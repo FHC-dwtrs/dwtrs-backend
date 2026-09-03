@@ -9,6 +9,8 @@ import {
   transferCase,
   reassignCase,
   getPreviouslyHandledCases,
+  getCaseHistory,
+  getCaseRemarks,
 } from "./workflow.service.js";
 
 import {
@@ -432,7 +434,6 @@ export async function makeCaseDecisionController(
   }
 }
 
-
 // ============================================================
 // PREVIOUSLY HANDLED CASES CONTROLLER
 // ============================================================
@@ -482,6 +483,90 @@ export async function getPreviouslyHandledCasesController(
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve previously handled cases.",
+    });
+  }
+}
+
+// ============================================================
+// CASE HISTORY CONTROLLER
+// ============================================================
+
+export async function getCaseHistoryController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    const { caseId } = req.params;
+
+    if (typeof caseId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case ID.",
+      });
+    }
+
+    const result = await getCaseHistory(caseId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Case history retrieved successfully.",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Get case history error:", error);
+
+    if (error instanceof Error && error.message === "Case not found.") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve case history.",
+    });
+  }
+}
+
+// ============================================================
+// CASE REMARKS CONTROLLER
+// ============================================================
+
+export async function getCaseRemarksController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    const { caseId } = req.params;
+
+    if (typeof caseId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid case ID.",
+      });
+    }
+
+    const result = await getCaseRemarks(caseId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Case remarks retrieved successfully.",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Get case remarks error:", error);
+
+    if (error instanceof Error && error.message === "Case not found.") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve case remarks.",
     });
   }
 }

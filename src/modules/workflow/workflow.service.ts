@@ -207,6 +207,21 @@ export async function assignCase(
       });
 
     // ========================================================
+    // 10b. RECORD REMARK
+    // ========================================================
+
+    if (input.remarks) {
+      await tx.remark.create({
+        data: {
+          caseId,
+          userId,
+          assignmentId: assignment.assignmentId,
+          remarkText: input.remarks,
+        },
+      });
+    }
+
+    // ========================================================
     // 11. UPDATE CASE
     // ========================================================
 
@@ -259,6 +274,7 @@ export async function assignCase(
         currentUnitId: toUnit.unitId,
         status: "UNDER_REVIEW",
         assignmentId: assignment.assignmentId,
+        remarks: input.remarks ?? null,
       },
     });
     await notifyUnitUsers(tx, {
@@ -561,6 +577,21 @@ export async function returnCase(
           toUnit: true,
         },
       });
+
+    // ========================================================
+    // 7b. RECORD REMARK
+    // ========================================================
+
+    if (input.remarks) {
+      await tx.remark.create({
+        data: {
+          caseId,
+          userId,
+          assignmentId: assignment.assignmentId,
+          remarkText: input.remarks,
+        },
+      });
+    }
 
     // ========================================================
     // 8. UPDATE CASE
@@ -949,6 +980,21 @@ export async function reassignCase(
       });
 
     // ========================================================
+    // 11b. RECORD REMARK
+    // ========================================================
+
+    if (input.remarks) {
+      await tx.remark.create({
+        data: {
+          caseId,
+          userId,
+          assignmentId: assignment.assignmentId,
+          remarkText: input.remarks,
+        },
+      });
+    }
+
+    // ========================================================
     // 12. UPDATE CASE
     // ========================================================
 
@@ -1217,6 +1263,20 @@ export async function makeCaseDecision(
           },
         },
       });
+
+      // ======================================================
+      // 8b. RECORD REMARK
+      // ======================================================
+
+      if (input.decisionText) {
+        await tx.remark.create({
+          data: {
+            caseId,
+            userId,
+            remarkText: input.decisionText,
+          },
+        });
+      }
 
       // ======================================================
       // 9. UPDATE CASE
@@ -1501,6 +1561,21 @@ export async function transferCase(
       });
 
     // ========================================================
+    // 10b. RECORD REMARK
+    // ========================================================
+
+    if (input.remarks) {
+      await tx.remark.create({
+        data: {
+          caseId,
+          userId,
+          assignmentId: transferAssignment.assignmentId,
+          remarkText: input.remarks,
+        },
+      });
+    }
+
+    // ========================================================
     // 11. UPDATE CASE
     // ========================================================
 
@@ -1554,6 +1629,7 @@ export async function transferCase(
         status: "UNDER_REVIEW",
         assignmentId: transferAssignment.assignmentId,
         transferType: "DIRECTORATE_TO_DIRECTORATE",
+        remarks: input.remarks ?? null,
       },
     });
     await notifyUnitUsers(tx, {
@@ -1579,20 +1655,6 @@ export async function transferCase(
 //
 // Returns cases that the authenticated user's organizational
 // unit has previously handled but does not currently hold.
-//
-// Example:
-//
-// R&A → Sector
-// Sector → Directorate
-//
-// Sector sees the case under Previously Handled.
-//
-// If:
-//
-// Directorate → Sector
-// Sector → R&A
-//
-// Sector sees it under Previously Handled again.
 //
 // Duplicate workflow assignments for the same case are
 // collapsed into one case.
@@ -1622,56 +1684,6 @@ export async function getPreviouslyHandledCases(userId: string) {
 
     const unitId = user.unit.unitId;
 
-    console.log("========== PREVIOUSLY HANDLED DEBUG ==========");
-    console.log("userId:", userId);
-    console.log("user unitId:", unitId);
-    console.log("user unit name:", user.unit.name);
-
-    // Get ALL assignments involving this unit.
-    const allAssignments = await tx.workflowAssignment.findMany({
-      where: {
-        OR: [
-          {
-            fromUnitId: unitId,
-          },
-          {
-            toUnitId: unitId,
-          },
-        ],
-      },
-      include: {
-        case: {
-          include: {
-            customer: true,
-            currentUnit: true,
-          },
-        },
-        fromUnit: true,
-        toUnit: true,
-      },
-      orderBy: {
-        assignedAt: "desc",
-      },
-    });
-
-    console.log(
-      "ALL ASSIGNMENTS INVOLVING THIS UNIT:",
-      allAssignments.map((assignment) => ({
-        assignmentId: assignment.assignmentId,
-        caseId: assignment.caseId,
-        assignmentStatus: assignment.assignmentStatus,
-        fromUnitId: assignment.fromUnitId,
-        fromUnitName: assignment.fromUnit?.name,
-        toUnitId: assignment.toUnitId,
-        toUnitName: assignment.toUnit?.name,
-        caseCurrentUnitId: assignment.case.currentUnitId,
-        caseCurrentUnitName: assignment.case.currentUnit?.name,
-        assignedAt: assignment.assignedAt,
-        completedAt: assignment.completedAt,
-      }))
-    );
-
-    // Specifically get assignments where this unit SENT the case.
     const outgoingAssignments = await tx.workflowAssignment.findMany({
       where: {
         fromUnitId: unitId,
@@ -1691,36 +1703,10 @@ export async function getPreviouslyHandledCases(userId: string) {
       },
     });
 
-    console.log(
-      "OUTGOING ASSIGNMENTS:",
-      outgoingAssignments.map((assignment) => ({
-        assignmentId: assignment.assignmentId,
-        caseId: assignment.caseId,
-        assignmentStatus: assignment.assignmentStatus,
-        fromUnitId: assignment.fromUnitId,
-        fromUnitName: assignment.fromUnit?.name,
-        toUnitId: assignment.toUnitId,
-        toUnitName: assignment.toUnit?.name,
-        caseCurrentUnitId: assignment.case.currentUnitId,
-        caseCurrentUnitName: assignment.case.currentUnit?.name,
-      }))
-    );
-
     // Previously handled = this unit sent the case somewhere else
     // and the case is no longer currently with this unit.
     const assignments = outgoingAssignments.filter(
       (assignment) => assignment.case.currentUnitId !== unitId
-    );
-
-    console.log(
-      "PREVIOUSLY HANDLED MATCHES:",
-      assignments.map((assignment) => ({
-        assignmentId: assignment.assignmentId,
-        caseId: assignment.caseId,
-        fromUnit: assignment.fromUnit?.name,
-        toUnit: assignment.toUnit?.name,
-        currentUnit: assignment.case.currentUnit?.name,
-      }))
     );
 
     const seenCaseIds = new Set<string>();
@@ -1749,17 +1735,133 @@ export async function getPreviouslyHandledCases(userId: string) {
         },
       }));
 
-    console.log(
-      "FINAL PREVIOUSLY HANDLED COUNT:",
-      previouslyHandledCases.length
-    );
-
-    console.log("==============================================");
-
     return {
       unit: user.unit,
       count: previouslyHandledCases.length,
       cases: previouslyHandledCases,
     };
   });
+}
+
+// ============================================================
+// GET CASE HISTORY (workflow timeline)
+// ============================================================
+//
+// Combines assignments, status changes, and decisions into a
+// single chronological timeline for the "Workflow" tab.
+// ============================================================
+
+export async function getCaseHistory(caseId: string) {
+  const caseRecord = await prisma.case.findUnique({
+    where: { caseId },
+  });
+
+  if (!caseRecord) {
+    throw new Error("Case not found.");
+  }
+
+  const [assignments, statusHistory, decisions] = await Promise.all([
+    prisma.workflowAssignment.findMany({
+      where: { caseId },
+      include: {
+        fromUnit: true,
+        toUnit: true,
+        assigner: {
+          select: { userId: true, name: true, email: true },
+        },
+      },
+      orderBy: { assignedAt: "asc" },
+    }),
+    prisma.statusHistory.findMany({
+      where: { caseId },
+      include: {
+        changer: {
+          select: { userId: true, name: true, email: true },
+        },
+      },
+      orderBy: { changedAt: "asc" },
+    }),
+    prisma.decision.findMany({
+      where: { caseId },
+      include: {
+        decider: {
+          select: { userId: true, name: true, email: true },
+        },
+      },
+      orderBy: { decidedAt: "asc" },
+    }),
+  ]);
+
+  const timeline = [
+    ...assignments.map((a) => ({
+      type: "ASSIGNMENT" as const,
+      timestamp: a.assignedAt,
+      assignmentId: a.assignmentId,
+      fromUnit: a.fromUnit?.name ?? null,
+      toUnit: a.toUnit.name,
+      by: a.assigner,
+      remarks: a.remarks,
+      assignmentStatus: a.assignmentStatus,
+    })),
+    ...statusHistory.map((s) => ({
+      type: "STATUS_CHANGE" as const,
+      timestamp: s.changedAt,
+      status: s.status,
+      by: s.changer,
+    })),
+    ...decisions.map((d) => ({
+      type: "DECISION" as const,
+      timestamp: d.decidedAt,
+      decisionType: d.decisionType,
+      decisionText: d.decisionText,
+      by: d.decider,
+    })),
+  ].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+
+  return { case: caseRecord, timeline };
+}
+
+// ============================================================
+// GET CASE REMARKS
+// ============================================================
+//
+// Reads directly from the Remark table.
+// ============================================================
+
+export async function getCaseRemarks(caseId: string) {
+  const caseRecord = await prisma.case.findUnique({
+    where: { caseId },
+  });
+
+  if (!caseRecord) {
+    throw new Error("Case not found.");
+  }
+
+  const remarks = await prisma.remark.findMany({
+    where: { caseId },
+    include: {
+      user: {
+        select: { userId: true, name: true, email: true },
+      },
+      assignment: {
+        include: {
+          fromUnit: true,
+          toUnit: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return remarks.map((r) => ({
+    remarkId: r.remarkId,
+    remarkText: r.remarkText,
+    createdAt: r.createdAt,
+    by: r.user,
+    context: r.assignment
+      ? `${r.assignment.fromUnit?.name ?? "?"} → ${r.assignment.toUnit.name}`
+      : null,
+  }));
 }
