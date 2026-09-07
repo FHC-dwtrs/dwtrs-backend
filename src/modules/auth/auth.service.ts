@@ -127,3 +127,54 @@ export async function loginUser(input: LoginInput) {
     },
   };
 }
+
+export async function getAuthenticatedUser(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: {
+      userId,
+    },
+
+    include: {
+      unit: true,
+
+      role: {
+        include: {
+          permissions: {
+            include: {
+              permission: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const role = user.role.name;
+
+  const permissions = user.role.permissions.map(
+    (rolePermission) =>
+      rolePermission.permission.name,
+  );
+
+  return {
+    userId: user.userId,
+    name: user.name,
+    email: user.email,
+
+    unit: user.unit
+      ? {
+          id: user.unit.unitId,
+          name: user.unit.name,
+          unitType: user.unit.unitType,
+        }
+      : null,
+
+    role,
+
+    permissions,
+  };
+}

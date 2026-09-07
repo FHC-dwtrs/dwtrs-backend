@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
-import { loginUser } from "./auth.service.js";
+import { getAuthenticatedUser, loginUser } from "./auth.service.js";
 import { loginSchema } from "./auth.validation.js";
+import { AuthenticatedRequest } from "../../middleware/auth.middleware.js";
 
 export async function login(req: Request, res: Response) {
   try {
@@ -36,6 +37,49 @@ export async function login(req: Request, res: Response) {
     }
 
     console.error("Login error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function getMe(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const authenticatedReq = req as AuthenticatedRequest;
+
+if (!authenticatedReq.user) {
+  return res.status(401).json({
+    success: false,
+    message: "Unauthorized",
+  });
+}
+
+const userId = authenticatedReq.user.sub;
+
+const user = await getAuthenticatedUser(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Authenticated user",
+      user,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "User not found"
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    console.error("Get authenticated user error:", error);
 
     return res.status(500).json({
       success: false,

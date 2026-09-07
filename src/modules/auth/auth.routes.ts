@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { login } from "./auth.controller.js";
+import { getMe, login } from "./auth.controller.js";
 import {
   authenticate,
   type AuthenticatedRequest,
@@ -59,7 +59,7 @@ router.post("/login", login);
  *       401:
  *         description: Unauthorized
  */
-router.get("/me", authenticate, (req, res) => {
+/*router.get("/me", authenticate, (req, res) => {
   const authenticatedReq = req as AuthenticatedRequest;
 
   res.status(200).json({
@@ -69,4 +69,6 @@ router.get("/me", authenticate, (req, res) => {
   });
 });
 
-export default router;
+export default router;*/
+
+router.get("/me", authenticate, getMe);
