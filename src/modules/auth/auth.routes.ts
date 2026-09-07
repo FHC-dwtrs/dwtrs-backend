@@ -72,3 +72,4 @@ router.post("/login", login);
 export default router;*/
 
 router.get("/me", authenticate, getMe);
+export default router;
