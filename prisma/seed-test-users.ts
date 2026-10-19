@@ -1,4 +1,4 @@
-import "dotenv/config";
+/*import "dotenv/config";
 import argon2 from "argon2";
 
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -569,10 +569,11 @@ main()
   .catch((error) => {
     console.error(
       "Test-user seeding failed:",
-      error,
+      error,]
     );
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+  */
