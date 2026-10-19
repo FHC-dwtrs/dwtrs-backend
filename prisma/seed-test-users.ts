@@ -1,4 +1,4 @@
-/*import "dotenv/config";
+import "dotenv/config";
 import argon2 from "argon2";
 
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -576,4 +576,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-  */
+  
